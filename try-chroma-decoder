@@ -57,6 +57,12 @@ decode () {
 	stillseek="$3"
 	use3d="$4"
 
+	rm -f \
+		"$outdir/$testname.FAILED" \
+		"$outdir/$testname-input.png" \
+		"$outdir/$testname-output.png" \
+		"$outdir/$testname.avi"
+
 	case "$system" in
 	ntsc)
 		inputsize=910x525
@@ -102,7 +108,10 @@ decode () {
 			decoder="$decoder -f ${system}3d"
 		fi
 	fi
-	verbose $decoder "$tbc" "$rgb"
+	if ! verbose $decoder "$tbc" "$rgb"; then
+		touch "$outdir/$testname.FAILED"
+		return
+	fi
 
 	ffmpeg="ffmpeg -loglevel error -y"
 	ffmpegout="$ffmpeg -f rawvideo -r $fps -pix_fmt rgb48 -s $outputsize"
