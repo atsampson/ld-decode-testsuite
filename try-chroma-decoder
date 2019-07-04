@@ -46,7 +46,8 @@ make_tbc () {
 decode () {
 	system="$1"
 	lds="$2"
-	use3d="$3"
+	stillseek="$3"
+	use3d="$4"
 
 	case "$system" in
 	ntsc)
@@ -87,15 +88,20 @@ decode () {
 	verbose $decoder "$tbc" "$rgb"
 
 	ffmpeg="ffmpeg -loglevel error -y"
-	ffmpegout="$ffmpeg -f rawvideo -r $fps -pix_fmt rgb48 -s $outputsize -i $rgb"
+	ffmpegout="$ffmpeg -f rawvideo -r $fps -pix_fmt rgb48 -s $outputsize"
 
-	# Skip past the first frame, for the benefit of 3D decoders
-	skip="-ss 0.03 -t 0.03"
+	# Extract only one frame for still images (seeking first for 3D).
+	still=
+	if [ -n "$stillseek" ]; then
+		still="$still -ss $stillseek"
+	fi
+	still="$still -t 0.021"
 
-	$ffmpeg -f rawvideo -r 30 -pix_fmt gray16 -s $inputsize -i $tbc \
-		$skip "$outdir/$testname-input.png"
-	$ffmpegout $skip "$outdir/$testname-output.png"
-	$ffmpegout -b:v 15000k -aspect 4:3 -vcodec mpeg4 -flags +ilme+ildct \
+	$ffmpeg $still -f rawvideo -r 30 -pix_fmt gray16 -s $inputsize \
+		-i $tbc "$outdir/$testname-input.png"
+	$ffmpegout $still -i $rgb "$outdir/$testname-output.png"
+	$ffmpegout -i $rgb -b:v 15000k -aspect 4:3 \
+		-vcodec mpeg4 -flags +ilme+ildct \
 		"$outdir/$testname.avi"
 }
 
@@ -110,7 +116,7 @@ run_test () {
 		;;
 	snellwilcox3d)
 		# Snell & Wilcox test pattern from "Video Essentials"
-		decode ntsc "$testdatadir/ve-snw-cut.lds" 3d
+		decode ntsc "$testdatadir/ve-snw-cut.lds" 0.5 3d
 		;;
 	testcardg)
 		# BBC Test Card G from "Jason and the Argonauts"
