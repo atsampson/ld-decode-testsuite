@@ -22,7 +22,14 @@ tmpdir="/var/tmp/lddtest"
 
 mkdir -p "$outdir" "$cachedir" "$tmpdir"
 
-(cd "$ldddir" && git log -1) >"$outdir/git-revision"
+(cd "$ldddir" && git log -1) >"$outdir/git-revision.new"
+if [ -f "$outdir/git-revision" ]; then
+	if ! cmp -s "$outdir/git-revision" "$outdir/git-revision.new"; then
+		echo >&2 "Different git revision in $outdir/git-revision"
+		exit 1
+	fi
+fi
+mv "$outdir/git-revision.new" "$outdir/git-revision"
 commitdate=$(cd "$ldddir" && git log -1 --pretty=%cI)
 
 verbose () {
