@@ -45,5 +45,5 @@ for thisdir in "$testsuitedir"/output/*; do
 		build_dir tools/ld-chroma-decoder
 	fi
 
-	"$testsuitedir/try-chroma-decoder" $(basename "$thisdir") "$@"
+	"$testsuitedir/try-chroma-decoder" -n $(basename "$thisdir") "$@"
 done

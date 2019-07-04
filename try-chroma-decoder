@@ -1,13 +1,27 @@
 #!/bin/sh -e
 # Test the chroma decoder, capturing the output.
 
-if [ $# -lt 1 ]; then
-	echo >&2 "Usage: $0 VERSION [TEST ...]"
+usage () {
+	echo >&2 "Usage: $0 [-a] [-n VERSION] [TEST ...]"
 	exit 1
-fi
+}
 
-version="$1"
-shift
+newonly=false
+version=tmp
+while getopts "an:" c; do
+	case "$c" in
+	a)
+		newonly=true
+		;;
+	n)
+		version="$OPTARG"
+		;;
+	\?)
+		usage
+		;;
+	esac
+done
+shift $(expr $OPTIND - 1)
 
 testsuitedir="$(realpath $(dirname $0))"
 testdatadir="$(realpath $testsuitedir/../ld-decode-testdata)"
@@ -56,6 +70,11 @@ decode () {
 	lds="$2"
 	stillseek="$3"
 	use3d="$4"
+
+	if $newonly && [ -f "$outdir/$testname.avi" ]; then
+		echo >&2 "Test already done: $testname"
+		return
+	fi
 
 	rm -f \
 		"$outdir/$testname.FAILED" \
