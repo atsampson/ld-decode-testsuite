@@ -1,0 +1,142 @@
+#!/bin/sh -e
+# Test the chroma decoder, capturing the output.
+
+if [ $# -lt 1 ]; then
+	echo >&2 "Usage: $0 VERSION [TEST ...]"
+	exit 1
+fi
+
+version="$1"
+shift
+
+testsuitedir="$(realpath $(dirname $0))"
+testdatadir="$(realpath $testsuitedir/../ld-decode-testdata)"
+ldddir="$(realpath $testsuitedir/../ld-decode)"
+
+export PATH="$ldddir/tools/ld-ldstoefm:$PATH"
+export LD_LIBRARY_PATH="$ldddir/tools/library:$LD_LIBRARY_PATH"
+
+outdir="$testsuitedir/output/$version"
+cachedir="$testsuitedir/cache"
+tmpdir="/var/tmp/lddtest"
+
+mkdir -p "$outdir" "$cachedir" "$tmpdir"
+
+(cd "$ldddir" && git log -1) >"$outdir/git-revision"
+
+verbose () {
+	echo >&2 ">>> $*"
+	"$@"
+}
+
+# Check that a .tbc file exists, decoding it from a .lds if not.
+make_tbc () {
+	tbc="$1"
+	lds="$2"
+	shift 2
+
+	if [ -f "$tbc" ]; then
+		return
+	fi
+
+	verbose $ldddir/ld-decode.py "$@" "$lds" "${tbc%.tbc}"
+}
+
+# Chroma-decode an NTSC capture.
+decode () {
+	system="$1"
+	lds="$2"
+	use3d="$3"
+
+	case "$system" in
+	ntsc)
+		inputsize=910x525
+		outputsize=760x488
+		fps=30
+		lddargs="--ntsc"
+		;;
+	pal)
+		inputsize=1135x625
+		outputsize=928x576
+		fps=25
+		lddargs="--pal"
+		;;
+	esac
+
+	case "$lds" in
+	*.r8)
+		lddargs="$lddargs -f 8fsc --daa"
+		;;
+	esac
+
+	tbc="$cachedir/$testname.tbc"
+	rgb="$tmpdir/$testname.rgb"
+	make_tbc "$tbc" "$lds" $lddargs
+
+	if [ -f "$ldddir/tools/ld-comb-$system/main.cpp" ]; then
+		decoder="$ldddir/tools/ld-comb-$system/ld-comb-$system"
+		if [ -n "$use3d" ]; then
+			decoder="$decoder --3d"
+		fi
+	else
+		decoder="$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder"
+		if [ -n "$use3d" ]; then
+			decoder="$decoder -f ${system}3d"
+		fi
+	fi
+	verbose $decoder "$tbc" "$rgb"
+
+	ffmpeg="ffmpeg -loglevel error -y"
+	ffmpegout="$ffmpeg -f rawvideo -r $fps -pix_fmt rgb48 -s $outputsize -i $rgb"
+
+	# Skip past the first frame, for the benefit of 3D decoders
+	skip="-ss 0.03 -t 0.03"
+
+	$ffmpeg -f rawvideo -r 30 -pix_fmt gray16 -s $inputsize -i $tbc \
+		$skip "$outdir/$testname-input.png"
+	$ffmpegout $skip "$outdir/$testname-output.png"
+	$ffmpegout -b:v 15000k -aspect 4:3 -vcodec mpeg4 -flags +ilme+ildct \
+		"$outdir/$testname.avi"
+}
+
+all_tests="snellwilcox snellwilcox3d testcardg ntscbars palbars leon"
+run_test () {
+	testname="$1"
+
+	case "$testname" in
+	snellwilcox)
+		# Snell & Wilcox test pattern from "Video Essentials"
+		decode ntsc "$testdatadir/ve-snw-cut.lds"
+		;;
+	snellwilcox3d)
+		# Snell & Wilcox test pattern from "Video Essentials"
+		decode ntsc "$testdatadir/ve-snw-cut.lds" 3d
+		;;
+	testcardg)
+		# BBC Test Card G from "Jason and the Argonauts"
+		decode pal "$testdatadir/pal/jason-testpattern.lds"
+		;;
+	ntscbars)
+		# SMPTE colour bars from GGV1069
+		decode ntsc "$testdatadir/ggv_cbar_5500-v2800.lds"
+		;;
+	palbars)
+		# BBC colour bars from "Jason and the Argonauts"
+		decode pal "$testdatadir/pal/jason-cbar1.lds"
+		;;
+	leon)
+		# A few seconds from "Leon", captured noisily with cxadc
+		decode pal "/n/stuff2/capture/laserdisc/cap.leon.r8"
+		;;
+	esac
+}
+
+if [ $# -eq 0 ]; then
+	for testname in $all_tests; do
+		run_test "$testname"
+	done
+else
+	for testname in "$@"; do
+		run_test "$testname"
+	done
+fi
