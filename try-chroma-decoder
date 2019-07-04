@@ -23,6 +23,7 @@ tmpdir="/var/tmp/lddtest"
 mkdir -p "$outdir" "$cachedir" "$tmpdir"
 
 (cd "$ldddir" && git log -1) >"$outdir/git-revision"
+commitdate=$(cd "$ldddir" && git log -1 --pretty=%cI)
 
 verbose () {
 	echo >&2 ">>> $*"
@@ -52,13 +53,22 @@ decode () {
 	case "$system" in
 	ntsc)
 		inputsize=910x525
-		outputsize=760x488
+		if [ "$commitdate" '<' 2019-05-05 ]; then
+			# Pre ebf68032f3b9653c9a660749e8d21c414f181cae
+			outputsize=754x486
+		else
+			outputsize=760x488
+		fi
 		fps=30
 		lddargs="--ntsc"
 		;;
 	pal)
 		inputsize=1135x625
-		outputsize=928x576
+		if [ "$commitdate" '<' 2019-05-05 ]; then
+			outputsize=922x576
+		else
+			outputsize=928x576
+		fi
 		fps=25
 		lddargs="--pal"
 		;;
