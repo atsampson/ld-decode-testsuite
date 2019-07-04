@@ -1,0 +1,49 @@
+#!/bin/sh -ex
+# For each of the non-tmp versions tested in the past, build that version of
+# the chroma decoders again and rerun try-chroma-decoder. (This doesn't rerun
+# ld-decode for each version.)
+
+testsuitedir="$(realpath $(dirname $0))"
+ldddir="$(realpath $testsuitedir/../ld-decode)"
+
+build_dir () {
+	(
+		# This is a bit specific to Adam's test machine...
+		cd "$1"
+		qmake
+		sed -i \
+			-e 's/-pipe -O2/-O3 -march=native/g' \
+			-e 's/-lopencv_imgcodecs //' \
+			Makefile
+		make clean
+		make -j4
+	)
+}
+
+cd $ldddir
+for thisdir in "$testsuitedir"/output/*; do
+	case "$thisdir" in
+	*tmp*)
+		continue
+		;;
+	esac
+
+	if ! [ -f "$thisdir/git-revision" ]; then
+		continue
+	fi
+	rev=$(head -1 "$thisdir/git-revision" | cut -d' ' -f2)
+	git checkout $rev
+
+	build_dir tools/ld-decode-shared
+	if [ -f tools/ld-comb-ntsc/main.cpp ]; then
+		build_dir tools/ld-comb-ntsc
+	fi
+	if [ -f tools/ld-comb-pal/main.cpp ]; then
+		build_dir tools/ld-comb-pal
+	fi
+	if [ -f tools/ld-chroma-decoder/main.cpp ]; then
+		build_dir tools/ld-chroma-decoder
+	fi
+
+	"$testsuitedir/try-chroma-decoder" $(basename "$thisdir") "$@"
+done
