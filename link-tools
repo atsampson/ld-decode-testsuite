@@ -1,0 +1,29 @@
+#!/bin/sh
+# Create symlinks in a prefix to all the ld-decode tools.
+
+testsuitedir="$(realpath $(dirname $0))"
+ldddir="$(realpath $testsuitedir/../ld-decode)"
+
+prefix="$HOME/pkg/ld-decode"
+
+mkdir -p "$prefix/bin" "$prefix/lib"
+
+ln -sf "$ldddir/tools/library"/lib*.so* "$prefix/lib/"
+for f in \
+	"$ldddir/cx" \
+	"$ldddir/ld-cut.py" \
+	"$ldddir/ld-decode.py" \
+	"$ldddir/scripts/ld-compress.sh" \
+	"$ldddir/tools/ld-analyse/ld-analyse" \
+	"$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder" \
+	"$ldddir/tools/ld-combine/ld-combine" \
+	"$ldddir/tools/ld-dropout-correct/ld-dropout-correct" \
+	"$ldddir/tools/ld-lds-converter/ld-lds-converter" \
+	"$ldddir/tools/ld-ldstoefm/ld-ldstoefm" \
+	"$ldddir/tools/ld-process-efm/ld-process-efm" \
+	"$ldddir/tools/ld-process-vbi/ld-process-vbi" \
+	; do
+	if [ -f "$f" ]; then
+		ln -sf "$f" "$prefix/bin/"
+	fi
+done
