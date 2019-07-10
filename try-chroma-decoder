@@ -220,6 +220,11 @@ run_test () {
 		# A few seconds from "Leon", captured noisily with cxadc
 		decode pal "/n/stuff2/capture/laserdisc/cap.leon.r8"
 		;;
+
+	*)
+		echo >&2 "Unknown test: $testname"
+		exit 1
+		;;
 	esac
 }
 
