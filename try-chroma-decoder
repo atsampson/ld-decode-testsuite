@@ -188,7 +188,15 @@ decode () {
 		"$outdir/$testname.avi"
 }
 
-all_tests="snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon"
+GGV1069="/n/stuff2/capture/laserdisc/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
+GGV1011="/n/stuff2/capture/laserdisc/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
+all_tests="\
+	snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon \
+	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
+	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
+	pr-vbar pr-multiburst pr-white100 pr-black7.5 pr-pulsebar pr-stairstep pr-bars \
+	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp pr-motion \
+	"
 run_test () {
 	testname="$1"
 
@@ -224,6 +232,116 @@ run_test () {
 	leon)
 		# A few seconds from "Leon", captured noisily with cxadc
 		decode pal "/n/stuff2/capture/laserdisc/cap.leon.r8"
+		;;
+
+	# Tests from GGV1069, Pioneer's NTSC Reference Disc
+	nr-vbar)
+		# Crosstalk check; also tests that --frame gets the right frame
+		decode ntsc "$GGV1069" --frame 115 -l 10
+		;;
+	nr-multiburst)
+		decode ntsc "$GGV1069" --frame 951 -l 10
+		;;
+	nr-white100)
+		decode ntsc "$GGV1069" --frame 1851 -l 10
+		;;
+	nr-black7.5)
+		decode ntsc "$GGV1069" --frame 2751 -l 10
+		;;
+	nr-compositetest)
+		decode ntsc "$GGV1069" --frame 3651 -l 10
+		;;
+	nr-stairstep)
+		decode ntsc "$GGV1069" --frame 4551 -l 10
+		;;
+	nr-bars)
+		decode ntsc "$GGV1069" --frame 5451 -l 10
+		;;
+	nr-magenta)
+		decode ntsc "$GGV1069" --frame 7251 -l 10
+		# Other solid colours follow; magenta is what the service manuals use.
+		;;
+	nr-cross)
+		decode ntsc "$GGV1069" --frame 14451 -l 10
+		;;
+	nr-dot)
+		decode ntsc "$GGV1069" --frame 15351 -l 10
+		;;
+	nr-stills)
+		decode ntsc "$GGV1069" --frame 16251 -l 10
+		;;
+	nr-still*)
+		# This is a loop of 21 images; use nr-still1 to nr-still21 to get them.
+		# Not enabled by default because they're not very good quality.
+		num=$(echo "$testname" | sed s/nr-still//)
+		decode ntsc "$GGV1069" --frame $(expr 16200 + $num) -l 1
+		;;
+	nr-sweep)
+		decode ntsc "$GGV1069" --frame 17151 -l 10
+		;;
+	nr-testcard)
+		decode ntsc "$GGV1069" --frame 18051 -l 10
+		;;
+	nr-ramp)
+		decode ntsc "$GGV1069" --frame 18951 -l 10
+		;;
+	nr-bounce)
+		decode ntsc "$GGV1069" --frame 20751 -l 10
+		;;
+	nr-motion)
+		decode ntsc "$GGV1069" --frame 23401
+		;;
+
+	# Tests from GGV1011, Pioneer's PAL Reference Disc
+	pr-vbar)
+		# Crosstalk check; also tests that --frame gets the right frame
+		decode pal "$GGV1011" --frame 475 -l 10
+		;;
+	pr-multiburst)
+		decode pal "$GGV1011" --frame 801 -l 10
+		;;
+	pr-white100)
+		decode pal "$GGV1011" --frame 1551 -l 10
+		;;
+	pr-black7.5)
+		decode pal "$GGV1011" --frame 2301 -l 10
+		;;
+	pr-pulsebar)
+		decode pal "$GGV1011" --frame 3051 -l 10
+		;;
+	pr-stairstep)
+		decode pal "$GGV1011" --frame 3801 -l 10
+		;;
+	pr-bars)
+		decode pal "$GGV1011" --frame 4551 -l 10
+		;;
+	pr-magenta)
+		decode pal "$GGV1011" --frame 6051 -l 10
+		# Other solid colours follow
+		;;
+	pr-window)
+		decode pal "$GGV1011" --frame 11301 -l 10
+		;;
+	pr-cross)
+		decode pal "$GGV1011" --frame 12051 -l 10
+		;;
+	pr-dot)
+		decode pal "$GGV1011" --frame 12801 -l 10
+		;;
+	pr-black0)
+		decode pal "$GGV1011" --frame 13551 -l 10
+		;;
+	pr-sweep)
+		decode pal "$GGV1011" --frame 14301 -l 10
+		;;
+	pr-ramp)
+		decode pal "$GGV1011" --frame 15801 -l 10
+		;;
+	pr-yramp)
+		decode pal "$GGV1011" --frame 17301 -l 10
+		;;
+	pr-motion)
+		decode pal "$GGV1011" --frame 19501 --stillframe 20
 		;;
 
 	*)
