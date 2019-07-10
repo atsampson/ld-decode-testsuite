@@ -68,8 +68,34 @@ make_tbc () {
 decode () {
 	system="$1"
 	lds="$2"
-	stillseek="$3"
-	use3d="$4"
+	shift 2
+
+	frame=
+	stillframe=0
+	use3d=
+	while :; do
+		case "$1" in
+		--frame)
+			# CAV frame to seek to in the input file
+			frame="$2"
+			shift 2
+			;;
+		--stillframe)
+			# Frame (from 0) to seek to in the output file, for stills
+			stillframe="$2"
+			shift 2
+			;;
+		--3d|--3dmap)
+			# Use 3D decoder, or 3D decoder showing motion map
+			use3d="$1"
+			shift 1
+			;;
+		*)
+			# Remaining args are passed to the chroma decoder directly
+			break
+			;;
+		esac
+	done
 
 	if $newonly && [ -f "$outdir/$testname.avi" ]; then
 		echo >&2 "Test already done: $testname"
@@ -128,28 +154,31 @@ decode () {
 			decoder="$decoder -f ${system}3d"
 		fi
 	fi
-	if [ "$use3d" = "3dmap" ]; then
+	rawframe=0
+	if [ -n "$frame" ]; then
+		frameno=$("$testsuitedir/picno-to-frame" "$tbc.json" "$frame")
+		decoder="$decoder -s $frameno"
+		rawframe=$(expr $frameno - 1)
+	fi
+	if [ "$use3d" = "--3dmap" ]; then
 		decoder="$decoder --oftest"
 	fi
-	if ! verbose $decoder "$tbc" "$rgb"; then
+	if ! verbose $decoder "$@" "$tbc" "$rgb"; then
 		touch "$outdir/$testname.FAILED"
 		return
 	fi
 
 	ffmpeg="ffmpeg -loglevel error -y"
-	ffmpegout="$ffmpeg -f rawvideo -r $fps -pix_fmt rgb48 -s $outputsize"
+	ffmpegout="$ffmpeg -f rawvideo -pix_fmt rgb48 -s $outputsize"
 
-	# Extract only one frame for still images (seeking first for 3D).
-	still=
-	if [ -n "$stillseek" ]; then
-		still="$still -ss $stillseek"
-	fi
-	still="$still -t 0.021"
-
-	$ffmpeg $still -f rawvideo -r 30 -pix_fmt gray16 -s $inputsize \
+	$ffmpeg -f rawvideo -pix_fmt gray16 -s $inputsize -r 1 \
+		-ss $(expr $rawframe + $stillframe) -t 1 \
 		-i $tbc "$outdir/$testname-input.png"
-	$ffmpegout $still -i $rgb "$outdir/$testname-output.png"
-	$ffmpegout -i $rgb -b:v 15000k -aspect 4:3 \
+	$ffmpegout -r 1 \
+		-ss $stillframe -t 1 \
+		-i $rgb "$outdir/$testname-output.png"
+	$ffmpegout -r $fps \
+		-i $rgb -b:v 15000k -aspect 4:3 \
 		-vcodec mpeg4 -flags +ilme+ildct \
 		"$outdir/$testname.avi"
 }
@@ -165,15 +194,15 @@ run_test () {
 		;;
 	snellwilcox3d)
 		# Snell & Wilcox test pattern from "Video Essentials"
-		decode ntsc "$testdatadir/ve-snw-cut.lds" 0.5 3d
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3d
 		;;
 	3dmap1)
 		# 3D map -- this should have motion
-		decode ntsc "$testdatadir/ve-snw-cut.lds" 0.1 3dmap
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 5 --3dmap
 		;;
 	3dmap2)
 		# 3D map -- this should be still
-		decode ntsc "$testdatadir/ve-snw-cut.lds" 0.5 3dmap
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3dmap
 		;;
 	testcardg)
 		# BBC Test Card G from "Jason and the Argonauts"

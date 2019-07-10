@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+# Given an ld-decode .tbc.json file and a picture number, print the (first)
+# frame number that contains that picture number.
+# Usage: picno-to-frame JSON-FILE PIC-NUMBER
+
+import json
+import sys
+
+with open(sys.argv[1], "r") as f:
+    data = json.load(f)
+picno = int(sys.argv[2])
+
+for field in data["fields"]:
+    if field.get("frameNumber") == picno:
+        print(((field["seqNo"] - 1) // 2) + 1)
+        break
