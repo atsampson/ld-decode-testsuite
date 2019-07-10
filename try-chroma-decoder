@@ -112,7 +112,8 @@ decode () {
 		;;
 	esac
 
-	tbc="$cachedir/$testname.tbc"
+	# Name the cached .tbc after the .lds file, for reuse between tests.
+	tbc="$cachedir/$(echo "$lds" | sed 's,/,_,g').tbc"
 	rgb="$tmpdir/$testname.rgb"
 	make_tbc "$tbc" "$lds" $lddargs
 
