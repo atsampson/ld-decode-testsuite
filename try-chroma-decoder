@@ -97,6 +97,11 @@ decode () {
 		esac
 	done
 
+	if ! [ -f "$lds" ]; then
+		echo >&2 "Test skipped because source file is missing: $testname"
+		return
+	fi
+
 	if $newonly && [ -f "$outdir/$testname.avi" ]; then
 		echo >&2 "Test already done: $testname"
 		return
