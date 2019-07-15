@@ -2,19 +2,23 @@
 # Test the chroma decoder, capturing the output.
 
 usage () {
-	echo >&2 "Usage: $0 [-a] [-n VERSION] [TEST ...]"
+	echo >&2 "Usage: $0 [-a] [-n VERSION] [-s SYSTEM] [TEST ...]"
 	exit 1
 }
 
 newonly=false
 version=tmp
-while getopts "an:" c; do
+onlysystem=
+while getopts "an:s:" c; do
 	case "$c" in
 	a)
 		newonly=true
 		;;
 	n)
 		version="$OPTARG"
+		;;
+	s)
+		onlysystem="$OPTARG"
 		;;
 	\?)
 		usage
@@ -64,7 +68,7 @@ make_tbc () {
 	verbose $ldddir/ld-decode.py "$@" "$lds" "${tbc%.tbc}"
 }
 
-# Chroma-decode an NTSC capture.
+# Chroma-decode a capture.
 decode () {
 	system="$1"
 	lds="$2"
@@ -96,6 +100,11 @@ decode () {
 			;;
 		esac
 	done
+
+	if [ -n "$onlysystem" -a "$system" != "$onlysystem" ]; then
+		echo >&2 "Test skipped because it's not for $onlysystem: $testname"
+		return
+	fi
 
 	if ! [ -f "$lds" ]; then
 		echo >&2 "Test skipped because source file is missing: $testname"
