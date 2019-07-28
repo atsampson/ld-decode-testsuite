@@ -5,6 +5,27 @@
 # FIXME: Options to select which sound channels to extract
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
+usage () {
+	echo >&2 "Usage: $0 [-p] LDS-FILE OUTPUT-BASE"
+	exit 1
+}
+
+usepipe=false
+while getopts "p" c; do
+	case "$c" in
+	p)
+		usepipe=true
+		;;
+	\?)
+		usage
+		;;
+	esac
+done
+shift $(expr $OPTIND - 1)
+
+if [ "$#" != 2 ]; then
+	usage
+fi
 infile="$1"
 out="$2"
 
@@ -24,12 +45,18 @@ stage efm \
 stage doc \
 	ld-dropout-correct --overcorrect "$out".tbc "$out".doc
 
+if $usepipe; then
+	rgbfile=-
+else
+	rgbfile="$out".rgb
+fi
+
 stage chroma \
-	ld-chroma-decoder "$out".doc "$out".rgb
+	ld-chroma-decoder "$out".doc "$rgbfile"
 
 stage encode \
 	ffmpeg \
-		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$out".rgb \
+		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$rgbfile" \
 		-f s16le -ar 44100 -ac 2 -i "$out".dpcm \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
 		-map 0:0 -map 1:0 -map 2:0 \
