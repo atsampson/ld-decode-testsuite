@@ -1,0 +1,42 @@
+#!/bin/sh -e
+# Run through the entire decoding process.
+
+# FIXME: PAL/NTSC
+# FIXME: Options to select which sound channels to extract
+# FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
+
+ldd=$HOME/src/ld-decode-ats
+
+infile="$1"
+out="$2"
+
+stage () {
+	name="$1"
+	shift
+
+	echo "Would do:" "$@"
+}
+
+stage decode \
+	"$ldd"/ld-decode.py --ntsc "$infile" "$out"
+
+stage efm \
+	"$ldd"/tools/ld-process-efm/ld-process-efm --noninteractive "$out".efm "$out".dpcm
+
+stage doc \
+	"$ldd"/tools/ld-dropout-correct/ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+
+stage chroma \
+	"$ldd"/tools/ld-chroma-decoder/ld-chroma-decoder "$out".doc "$out".rgb
+
+stage encode \
+	ffmpeg \
+		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$out".rgb \
+		-f s16le -ar 44100 -ac 2 -i "$out".dpcm \
+		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
+		-map 0:0 -map 1:0 -map 2:0 \
+		-pix_fmt yuv420p \
+		-filter setfield=tff \
+		-vcodec libx264 -crf 18 -flags +ildct+ilme -aspect 4:3 \
+		-acodec flac \
+		-y "$out".mkv
