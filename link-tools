@@ -8,7 +8,14 @@ prefix="$HOME/pkg/ld-decode"
 
 mkdir -p "$prefix/bin" "$prefix/lib"
 
-ln -sf "$ldddir/tools/library"/lib*.so* "$prefix/lib/"
+for f in \
+	"$ldddir/tools/shared"/lib*.so* \
+	"$ldddir/tools/ld-decode-shared"/lib*.so* \
+	; do
+	if [ -f "$f" ]; then
+		ln -sf "$f" "$prefix/lib/"
+	fi
+done
 for f in \
 	"$ldddir/cx" \
 	"$ldddir/ld-cut.py" \

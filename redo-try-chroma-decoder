@@ -34,7 +34,9 @@ for thisdir in "$testsuitedir"/output/*; do
 	rev=$(head -1 "$thisdir/git-revision" | cut -d' ' -f2)
 	git checkout $rev
 
-	build_dir tools/ld-decode-shared
+	if [ -f tools/ld-decode-shared/sourcefield.h ]; then
+		build_dir tools/ld-decode-shared
+	fi
 	if [ -f tools/ld-comb-ntsc/main.cpp ]; then
 		build_dir tools/ld-comb-ntsc
 	fi
