@@ -5,8 +5,6 @@
 # FIXME: Options to select which sound channels to extract
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
-ldd=$HOME/src/ld-decode-ats
-
 infile="$1"
 out="$2"
 
@@ -18,16 +16,16 @@ stage () {
 }
 
 stage decode \
-	"$ldd"/ld-decode.py --ntsc "$infile" "$out"
+	ld-decode.py --ntsc "$infile" "$out"
 
 stage efm \
-	"$ldd"/tools/ld-process-efm/ld-process-efm --noninteractive "$out".efm "$out".dpcm
+	ld-process-efm --noninteractive "$out".efm "$out".dpcm
 
 stage doc \
-	"$ldd"/tools/ld-dropout-correct/ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+	ld-dropout-correct --overcorrect "$out".tbc "$out".doc
 
 stage chroma \
-	"$ldd"/tools/ld-chroma-decoder/ld-chroma-decoder "$out".doc "$out".rgb
+	ld-chroma-decoder "$out".doc "$out".rgb
 
 stage encode \
 	ffmpeg \
