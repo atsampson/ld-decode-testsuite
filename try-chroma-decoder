@@ -2,23 +2,31 @@
 # Test the chroma decoder, capturing the output.
 
 usage () {
-	echo >&2 "Usage: $0 [-a] [-n VERSION] [-s SYSTEM] [TEST ...]"
+	echo >&2 "Usage: $0 [-a] [-I] [-V] [-n VERSION] [-s SYSTEM] [TEST ...]"
 	exit 1
 }
 
 newonly=false
+inputfiles=true
 version=tmp
 onlysystem=
-while getopts "an:s:" c; do
+videofiles=true
+while getopts "aIn:s:V" c; do
 	case "$c" in
 	a)
 		newonly=true
+		;;
+	I)
+		inputfiles=false
 		;;
 	n)
 		version="$OPTARG"
 		;;
 	s)
 		onlysystem="$OPTARG"
+		;;
+	V)
+		videofiles=false
 		;;
 	\?)
 		usage
@@ -111,7 +119,7 @@ decode () {
 		return
 	fi
 
-	if $newonly && [ -f "$outdir/$testname.avi" ]; then
+	if $newonly && [ -f "$outdir/$testname-output.png" ]; then
 		echo >&2 "Test already done: $testname"
 		return
 	fi
@@ -185,16 +193,20 @@ decode () {
 	ffmpeg="ffmpeg -loglevel error -y"
 	ffmpegout="$ffmpeg -f rawvideo -pix_fmt rgb48 -s $outputsize"
 
-	$ffmpeg -f rawvideo -pix_fmt gray16 -s $inputsize -r 1 \
-		-ss $(expr $rawframe + $stillframe) -t 1 \
-		-i $tbc "$outdir/$testname-input.png"
+	if $inputfiles; then
+		$ffmpeg -f rawvideo -pix_fmt gray16 -s $inputsize -r 1 \
+			-ss $(expr $rawframe + $stillframe) -t 1 \
+			-i $tbc "$outdir/$testname-input.png"
+	fi
 	$ffmpegout -r 1 \
 		-ss $stillframe -t 1 \
 		-i $rgb "$outdir/$testname-output.png"
-	$ffmpegout -r $fps \
-		-i $rgb -b:v 15000k -aspect 4:3 \
-		-vcodec mpeg4 -flags +ilme+ildct \
-		"$outdir/$testname.avi"
+	if $videofiles; then
+		$ffmpegout -r $fps \
+			-i $rgb -b:v 15000k -aspect 4:3 \
+			-vcodec mpeg4 -flags +ilme+ildct \
+			"$outdir/$testname.avi"
+	fi
 }
 
 GGV1069="/n/stuff2/capture/laserdisc/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
