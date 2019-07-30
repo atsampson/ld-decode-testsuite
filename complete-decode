@@ -61,7 +61,7 @@ stage encode \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
 		-map 0:0 -map 1:0 -map 2:0 \
 		-pix_fmt yuv420p \
-		-filter setfield=tff \
+		-filter:v setfield=tff \
 		-vcodec libx264 -crf 18 -flags +ildct+ilme -aspect 4:3 \
 		-acodec flac \
 		-y "$out".mkv
