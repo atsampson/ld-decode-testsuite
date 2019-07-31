@@ -209,8 +209,9 @@ decode () {
 	fi
 }
 
-GGV1069="/n/stuff2/capture/laserdisc/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
-GGV1011="/n/stuff2/capture/laserdisc/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
+ATSDATA="/n/stuff2/capture/laserdisc"
+GGV1069="$ATSDATA/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
+GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
 	snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \

@@ -1,0 +1,99 @@
+#!/bin/sh -e
+# Test ld-decode.py.
+
+usage () {
+	echo >&2 "Usage: $0 [TEST ...]"
+	exit 1
+}
+
+while getopts "" c; do
+	case "$c" in
+	\?)
+		usage
+		;;
+	esac
+done
+shift $(expr $OPTIND - 1)
+
+testsuitedir="$(realpath $(dirname $0))"
+testdatadir="$(realpath $testsuitedir/../ld-decode-testdata)"
+ldddir="$(realpath $testsuitedir/../ld-decode)"
+
+tmpdir="/var/tmp/lddtest"
+
+mkdir -p "$tmpdir"
+
+verbose () {
+	echo >&2 ">>> $*"
+	"$@"
+}
+
+# Run ld-decode and check that it produced some TBC output.
+decode () {
+	srcfile="$1"
+	shift 1
+
+	output="$tmpdir/decoded"
+	rm -f "$output".*
+
+	verbose $ldddir/ld-decode.py "$@" "$srcfile" "$output"
+
+	# Check the TBC and JSON files aren't empty.
+	for f in "$output".tbc "$output".tbc.json; do
+		if [ ! -s "$f" ]; then
+			echo "$f is empty"
+			exit 1
+		fi
+		ls -l "$f"
+	done
+	# XXX Examine JSON metadata to check frames were extracted
+	# XXX Produce image from TBC output
+}
+
+all_tests="\
+	input-lds-pal input-lds-ntsc input-r8-pal input-r8-ntsc input-oga-pal input-oga-ntsc
+	"
+
+ATSDATA="/n/stuff2/capture/laserdisc"
+GGV1069="$ATSDATA/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
+GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
+run_test () {
+	testname="$1"
+
+	case "$testname" in
+	# Test different input formats.
+	input-lds-pal)
+		decode "$testdatadir/pal/jason-testpattern.lds" -p -l3
+		;;
+	input-lds-ntsc)
+		decode "$testdatadir/ve-snw-cut.lds" -n -l3
+		;;
+	input-r8-pal)
+		decode "$ATSDATA/cap.leon.r8" -p -l10 -f 8fsc
+		;;
+	input-r8-ntsc)
+		decode "$ATSDATA/StopMakingSense_side1_4400_cx_7xbuffer_gain9.r8" -n -s40 -l10 -f 8fsc
+		;;
+	input-oga-pal)
+		decode "$GGV1011" -p -s200 -l10
+		;;
+	input-oga-ntsc)
+		decode "$GGV1069" -n -s200 -l10
+		;;
+
+	*)
+		echo >&2 "Unknown test: $testname"
+		exit 1
+		;;
+	esac
+}
+
+if [ $# -eq 0 ]; then
+	for testname in $all_tests; do
+		run_test "$testname"
+	done
+else
+	for testname in "$@"; do
+		run_test "$testname"
+	done
+fi
