@@ -3,16 +3,21 @@
 
 # FIXME: PAL/NTSC
 # FIXME: Options to select which sound channels to extract
+# FIXME: Detect PCM deemphasis automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
 usage () {
-	echo >&2 "Usage: $0 [-p] LDS-FILE OUTPUT-BASE"
+	echo >&2 "Usage: $0 [-dp] LDS-FILE OUTPUT-BASE"
 	exit 1
 }
 
+deemph=
 usepipe=false
-while getopts "p" c; do
+while getopts "dp" c; do
 	case "$c" in
+	d)
+		deemph="deemph"
+		;;
 	p)
 		usepipe=true
 		;;
@@ -40,7 +45,14 @@ stage decode \
 	ld-decode.py --ntsc "$infile" "$out"
 
 stage efm \
-	ld-process-efm --noninteractive "$out".efm "$out".dpcm
+	ld-process-efm --noninteractive "$out".efm "$out".efm.pcm
+
+stage postefm \
+	sox \
+		-t raw -e signed -b 16 -r 44100 -c 2 "$out".efm.pcm \
+		"$out".efm.flac \
+		$deemph \
+		stats
 
 stage doc \
 	ld-dropout-correct --overcorrect "$out".tbc "$out".doc
@@ -57,11 +69,12 @@ stage chroma \
 stage encode \
 	ffmpeg \
 		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$rgbfile" \
-		-f s16le -ar 44100 -ac 2 -i "$out".dpcm \
+		-i "$out".efm.flac \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
 		-map 0:0 -map 1:0 -map 2:0 \
 		-pix_fmt yuv420p \
 		-filter:v setfield=tff \
-		-vcodec libx264 -crf 16 -flags +ildct+ilme -aspect 4:3 \
-		-acodec flac \
+		-codec:v libx264 -crf 16 -flags +ildct+ilme -aspect 4:3 \
+		-codec:a:0 copy \
+		-codec:a:1 flac \
 		-y "$out".mkv
