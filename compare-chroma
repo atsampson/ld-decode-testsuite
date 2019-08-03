@@ -8,6 +8,8 @@ name2="$2"
 files=""
 for file1 in output/$name1/*-output.png; do
 	file2=output/$name2/$(basename $file1)
-	files="$files $file1 $file2"
+	if [ -f "$file1" -a -f "$file2" ]; then
+		files="$files $file1 $file2"
+	fi
 done
 feh --scale-down $files
