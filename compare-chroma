@@ -1,0 +1,13 @@
+#!/bin/sh
+# View pairs of images from two different runs of try-chroma-decoder.
+# Usage: compare-chroma NAME1 NAME2
+
+name1="$1"
+name2="$2"
+
+files=""
+for file1 in output/$name1/*-output.png; do
+	file2=output/$name2/$(basename $file1)
+	files="$files $file1 $file2"
+done
+feh --scale-down $files
