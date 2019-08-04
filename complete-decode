@@ -44,6 +44,12 @@ stage () {
 stage decode \
 	ld-decode.py --ntsc "$infile" "$out"
 
+stage copyjson \
+	cp "$out.tbc.json" "$out.tbc.json.orig"
+
+stage vbi \
+	ld-process-vbi -n "$out.tbc"
+
 stage efm \
 	ld-process-efm --noninteractive "$out".efm "$out".efm.pcm
 
