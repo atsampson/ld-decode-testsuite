@@ -5,6 +5,7 @@
 # FIXME: Options to select which sound channels to extract
 # FIXME: Detect PCM deemphasis automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
+# FIXME: No-DOC option
 
 usage () {
 	echo >&2 "Usage: $0 [-dp] LDS-FILE OUTPUT-BASE"
