@@ -72,13 +72,14 @@ fi
 stage chroma \
 	ld-chroma-decoder "$out".doc "$rgbfile"
 
+# Use yuvj444p for full range and no chroma subsampling.
 stage encode \
 	ffmpeg \
 		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$rgbfile" \
 		-i "$out".efm.flac \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
 		-map 0:0 -map 1:0 -map 2:0 \
-		-pix_fmt yuv420p \
+		-pix_fmt yuvj444p \
 		-filter:v setfield=tff \
 		-codec:v libx264 -crf 16 -flags +ildct+ilme -aspect 4:3 \
 		-codec:a:0 copy \
