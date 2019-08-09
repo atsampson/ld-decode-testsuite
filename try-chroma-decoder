@@ -248,7 +248,8 @@ run_test () {
 		decode ntsc "$testdatadir/ggv_cbar_5500-v2800.lds"
 		;;
 	palbars)
-		# BBC colour bars from "Jason and the Argonauts"
+		# 75% colour bars from "Jason and the Argonauts"
+		# These are EBU PAL bars: white is 100% amplitude; colours are 75% amplitude.
 		decode pal "$testdatadir/pal/jason-cbar1.lds"
 		;;
 	leon)
@@ -335,6 +336,8 @@ run_test () {
 		decode pal "$GGV1011" --frame 3801 -l 10
 		;;
 	pr-bars)
+		# These are EBU SECAM bars: white and colours are all 75% amplitude.
+		# (Still encoded as PAL, but would produce valid output on a SECAM player.)
 		decode pal "$GGV1011" --frame 4551 -l 10
 		;;
 	pr-magenta)
