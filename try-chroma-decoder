@@ -2,19 +2,23 @@
 # Test the chroma decoder, capturing the output.
 
 usage () {
-	echo >&2 "Usage: $0 [-a] [-I] [-V] [-n VERSION] [-s SYSTEM] [TEST ...]"
+	echo >&2 "Usage: $0 [-a] [-f DECODER] [-I] [-V] [-n VERSION] [-s SYSTEM] [TEST ...]"
 	exit 1
 }
 
 newonly=false
+defaultdecoder=
 inputfiles=true
 version=tmp
 onlysystem=
 videofiles=true
-while getopts "aIn:s:V" c; do
+while getopts "af:In:s:V" c; do
 	case "$c" in
 	a)
 		newonly=true
+		;;
+	f)
+		defaultdecoder="$OPTARG"
 		;;
 	I)
 		inputfiles=false
@@ -85,6 +89,10 @@ decode () {
 	frame=
 	stillframe=0
 	use3d=
+	usedecoder="${system}2d"
+	if [ -n "$defaultdecoder" ]; then
+		usedecoder="$defaultdecoder"
+	fi
 	while :; do
 		case "$1" in
 		--frame)
@@ -100,7 +108,13 @@ decode () {
 		--3d|--3dmap)
 			# Use 3D decoder, or 3D decoder showing motion map
 			use3d="$1"
+			usedecoder="${system}3d"
 			shift 1
+			;;
+		--decoder)
+			# Use a specific decoder
+			usedecoder="$2"
+			shift 2
 			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
@@ -170,10 +184,11 @@ decode () {
 		if [ -n "$use3d" ]; then
 			decoder="$decoder --3d"
 		fi
+		# Doesn't understand -f, so usedecoder will be ignored.
 	else
 		decoder="$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder"
-		if [ -n "$use3d" ]; then
-			decoder="$decoder -f ${system}3d"
+		if [ -n "$usedecoder" ]; then
+			decoder="$decoder -f ${usedecoder}"
 		fi
 	fi
 	rawframe=0
