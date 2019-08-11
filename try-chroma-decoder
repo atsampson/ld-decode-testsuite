@@ -218,6 +218,8 @@ all_tests="\
 	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
 	pr-vbar pr-multiburst pr-white100 pr-black7.5 pr-pulsebar pr-stairstep pr-bars \
 	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp pr-motion \
+	pr-motion2 pr-motion4 pr-motion25 pr-motion54 pr-motion77 pr-motion88 pr-motion122 \
+	pr-motion123 pr-motion145 pr-motion155 \
 	"
 run_test () {
 	testname="$1"
@@ -367,6 +369,11 @@ run_test () {
 		;;
 	pr-motion)
 		decode pal "$GGV1011" --frame 19501 --stillframe 20
+		;;
+	pr-motion*)
+		# pr-motionN is a still frame from N seconds into the motion section.
+		num=$(echo "$testname" | sed s/pr-motion//)
+		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") -l 1
 		;;
 
 	*)
