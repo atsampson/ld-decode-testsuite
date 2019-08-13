@@ -252,7 +252,8 @@ GGV1069="$ATSDATA/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
 GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
 	snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon \
-	testcardg-t2d pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
+	testcardg-t2d palbars-t2d \
+	pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
 	noise-ntsc-05000 noise-ntsc-10000 noise-ntsc-20000 \
 	noise-pal-05000 noise-pal-10000 noise-pal-20000 \
@@ -305,6 +306,9 @@ run_test () {
 	# Tests for the Transform PAL decoder
 	testcardg-t2d)
 		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1
+		;;
+	palbars-t2d)
+		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform2d -l 1
 		;;
 	pr-motion*-t2d)
 		num=$(echo "$testname" | sed -e s/pr-motion// -e s/-t2d//)
