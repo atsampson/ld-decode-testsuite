@@ -90,6 +90,7 @@ decode () {
 	stillframe=0
 	use3d=
 	usedecoder="${system}2d"
+	noise=
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -114,6 +115,11 @@ decode () {
 		--decoder)
 			# Use a specific decoder
 			usedecoder="$2"
+			shift 2
+			;;
+		--noise)
+			# Add random noise to the TBC
+			noise="$2"
 			shift 2
 			;;
 		*)
@@ -188,6 +194,14 @@ decode () {
 	rgb="$tmpdir/$testname.rgb"
 	make_tbc "$tbc" "$lds" $lddargs
 
+	if [ -n "$noise" ]; then
+		noisytbc="$tbc.noise$noise"
+		if [ ! -f "$noisytbc" ]; then
+			$testsuitedir/rot-tbc "$noise" "$tbc" "$noisytbc"
+		fi
+		tbc="$noisytbc"
+	fi
+
 	if [ -f "$ldddir/tools/ld-comb-$system/main.cpp" ]; then
 		decoder="$ldddir/tools/ld-comb-$system/ld-comb-$system"
 		if [ -n "$use3d" ]; then
@@ -240,6 +254,9 @@ all_tests="\
 	snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon \
 	testcardg-t2d pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
+	noise-ntsc-05000 noise-ntsc-10000 noise-ntsc-20000 \
+	noise-pal-05000 noise-pal-10000 noise-pal-20000 \
+	noise-t2d-05000 noise-t2d-10000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
 	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
 	pr-vbar pr-multiburst pr-white100 pr-black7.5 pr-pulsebar pr-stairstep pr-bars \
@@ -295,6 +312,20 @@ run_test () {
 		;;
 	pr-sweep-t2d)
 		decode pal "$GGV1011" --frame 14301 --decoder transform2d -l 1
+		;;
+
+	# Tests with artificial noise added
+	noise-ntsc-*)
+		mag=$(echo "$testname" | sed 's/.*-//')
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --noise "$mag"
+		;;
+	noise-pal-*)
+		mag=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --noise "$mag"
+		;;
+	noise-t2d-*)
+		mag=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d --noise "$mag"
 		;;
 
 	# Tests from GGV1069, Pioneer's NTSC Reference Disc

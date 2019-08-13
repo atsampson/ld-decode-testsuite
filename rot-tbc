@@ -1,0 +1,29 @@
+#!/usr/bin/python3
+# Add random noise to a .tbc file.
+# Usage: rot-tbc MAGNITUDE INPUT-TBC OUTPUT-TBC
+
+import numpy as np
+import shutil
+import sys
+
+magnitude = float(sys.argv[1])
+fn_in = sys.argv[2]
+fn_out = sys.argv[3]
+
+# Generate the same pattern each time.
+rng = np.random.Generator(np.random.MT19937(42))
+
+with open(fn_in, "rb") as fin:
+    with open(fn_out, "wb") as fout:
+        while True:
+            data = np.fromfile(fin, np.uint16, 1000000).astype(float)
+            if len(data) == 0:
+                break
+
+            data += (rng.random(len(data)) - 0.5) * magnitude
+            data = np.maximum(data, 0)
+            data = np.minimum(data, 65535)
+
+            data.astype(np.uint16).tofile(fout)
+
+shutil.copyfile(fn_in + ".json", fn_out + ".json")
