@@ -11,7 +11,7 @@ fn_in = sys.argv[2]
 fn_out = sys.argv[3]
 
 # Generate the same pattern each time.
-rng = np.random.Generator(np.random.MT19937(42))
+np.random.seed(42)
 
 with open(fn_in, "rb") as fin:
     with open(fn_out, "wb") as fout:
@@ -20,7 +20,7 @@ with open(fn_in, "rb") as fin:
             if len(data) == 0:
                 break
 
-            data += (rng.random(len(data)) - 0.5) * magnitude
+            data += (np.random.random(len(data)) - 0.5) * magnitude
             data = np.maximum(data, 0)
             data = np.minimum(data, 65535)
 
