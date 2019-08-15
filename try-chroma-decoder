@@ -10,9 +10,10 @@ newonly=false
 defaultdecoder=
 inputfiles=true
 version=tmp
+extraopts=
 onlysystem=
 videofiles=true
-while getopts "af:In:s:V" c; do
+while getopts "af:In:o:s:V" c; do
 	case "$c" in
 	a)
 		newonly=true
@@ -25,6 +26,9 @@ while getopts "af:In:s:V" c; do
 		;;
 	n)
 		version="$OPTARG"
+		;;
+	o)
+		extraopts="$OPTARG"
 		;;
 	s)
 		onlysystem="$OPTARG"
@@ -222,6 +226,9 @@ decode () {
 	fi
 	if [ "$use3d" = "--3dmap" ]; then
 		decoder="$decoder --oftest"
+	fi
+	if [ -n "$extraopts" ]; then
+		decoder="$decoder $extraopts"
 	fi
 	if ! verbose $decoder "$@" "$tbc" "$rgb"; then
 		touch "$outdir/$testname.FAILED"
