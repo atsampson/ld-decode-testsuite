@@ -255,9 +255,7 @@ all_tests="\
 	testcardg-t2d palbars-t2d \
 	pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
-	noise-ntsc-05000 noise-ntsc-10000 noise-ntsc-20000 \
-	noise-pal-05000 noise-pal-10000 noise-pal-20000 \
-	noise-t2d-05000 noise-t2d-10000 noise-t2d-20000 \
+	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
 	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
 	pr-vbar pr-multiburst pr-white100 pr-black7.5 pr-pulsebar pr-stairstep pr-bars \
