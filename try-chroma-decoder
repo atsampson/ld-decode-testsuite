@@ -251,7 +251,9 @@ ATSDATA="/n/stuff2/capture/laserdisc"
 GGV1069="$ATSDATA/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
 GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
-	snellwilcox snellwilcox3d 3dmap1 3dmap2 testcardg ntscbars palbars leon \
+	snellwilcox ntscbars \
+	testcardg palbars leon \
+	snellwilcox3d 3dmap1 3dmap2 \
 	testcardg-t2d palbars-t2d \
 	pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
@@ -267,29 +269,21 @@ run_test () {
 	testname="$1"
 
 	case "$testname" in
+
+	# Basic NTSC tests
 	snellwilcox)
 		# Snell & Wilcox test pattern from "Video Essentials"
 		decode ntsc "$testdatadir/ve-snw-cut.lds"
 		;;
-	snellwilcox3d)
-		# Snell & Wilcox test pattern from "Video Essentials"
-		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3d
-		;;
-	3dmap1)
-		# 3D map -- this should have motion
-		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 5 --3dmap
-		;;
-	3dmap2)
-		# 3D map -- this should be still
-		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3dmap
-		;;
-	testcardg)
-		# BBC Test Card G from "Jason and the Argonauts"
-		decode pal "$testdatadir/pal/jason-testpattern.lds"
-		;;
 	ntscbars)
 		# SMPTE colour bars from GGV1069
 		decode ntsc "$testdatadir/ggv_cbar_5500-v2800.lds"
+		;;
+
+	# Basic PAL tests
+	testcardg)
+		# BBC Test Card G from "Jason and the Argonauts"
+		decode pal "$testdatadir/pal/jason-testpattern.lds"
 		;;
 	palbars)
 		# 75% colour bars from "Jason and the Argonauts"
@@ -301,7 +295,21 @@ run_test () {
 		decode pal "/n/stuff2/capture/laserdisc/cap.leon.r8"
 		;;
 
-	# Tests for the Transform PAL decoder
+	# ntsc3d decoder
+	snellwilcox-n3d)
+		# Snell & Wilcox test pattern from "Video Essentials"
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3d
+		;;
+	3dmap1)
+		# 3D map -- this should have motion
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 5 --3dmap
+		;;
+	3dmap2)
+		# 3D map -- this should be still
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3dmap
+		;;
+
+	# transform2d decoder
 	testcardg-t2d)
 		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1
 		;;
