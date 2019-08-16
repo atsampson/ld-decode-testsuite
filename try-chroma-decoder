@@ -53,8 +53,12 @@ export LD_LIBRARY_PATH="$ldddir/tools/library:$LD_LIBRARY_PATH"
 outdir="$testsuitedir/output/$version"
 cachedir="$testsuitedir/cache"
 tmpdir="/var/tmp/lddtest"
+ramdir="/tmp/lddtest"
 
-mkdir -p "$outdir" "$cachedir" "$tmpdir"
+mkdir -p "$outdir" "$cachedir" "$tmpdir" "$ramdir"
+
+# Remove any leftover .tbc files from $ramdir on exit.
+trap 'rm -f "$ramdir"/*.tbc' 0
 
 (cd "$ldddir" && git log -1) >"$outdir/git-revision.new"
 if [ -f "$outdir/git-revision" ]; then
@@ -251,6 +255,98 @@ decode () {
 			-i $rgb -b:v 15000k -aspect 4:3 \
 			-vcodec mpeg4 -flags +ilme+ildct \
 			"$outdir/$testname.avi"
+	fi
+}
+
+# Capture timings.
+benchmark () {
+	system="$1"
+	lds="$2"
+	usedecoder="$3"
+	shift 3
+
+	if ! [ -f "$lds" ]; then
+		echo >&2 "Test skipped because source file is missing: $testname"
+		return
+	fi
+
+	if [ ! -f "$ldddir/tools/ld-chroma-decoder/transformpal.cpp" ]; then
+		case "$usedecoder" in
+		transform*)
+			echo >&2 "Test skipped because no Transform support: $testname"
+			return
+			;;
+		esac
+	fi
+
+	# Get the number of CPUs, and go a little beyond that in case that works better
+	maxcpus=$(grep ^processor /proc/cpuinfo | wc -l)
+	maxcpus=$(expr $maxcpus + 3)
+
+	# Check for parallelisation support in decoders.
+	numframes=1000
+	case "$usedecoder" in
+	pal2d)
+		if [ -f "$ldddir/tools/ld-chroma-decoder/main.cpp" ]; then
+			:
+		elif ! grep -q threadsOption "$ldddir/tools/ld-comb-pal/main.cpp" 2>/dev/null; then
+			maxcpus=1
+		fi
+		;;
+	ntsc2d)
+		if [ ! -f "$ldddir/tools/ld-chroma-decoder/ntscdecoder.cpp" ]; then
+			maxcpus=1
+		fi
+		;;
+	ntsc3d)
+		if ! grep -q getLookBehind "$ldddir/tools/ld-chroma-decoder/ntscdecoder.cpp" 2>/dev/null; then
+			maxcpus=1
+		fi
+		# Slow decoder - use a shorter benchmark
+		numframes=300
+		;;
+	esac
+
+	benchfile="$outdir/Benchfile.$testname."$(hostname)
+
+	case "$system" in
+	ntsc)
+		lddargs="--ntsc"
+		;;
+	pal)
+		lddargs="--pal"
+		;;
+	esac
+
+	# Name the cached .tbc after the .lds file, for reuse between tests.
+	tbcbase="$(echo "$lds" | sed 's,/,_,g')-benchmark$numframes.tbc"
+	tbc="$cachedir/$tbcbase"
+	make_tbc "$tbc" "$lds" $lddargs -l $numframes
+
+	# Copy the .tbc to $ramdir, to minimise read time.
+	tbcram="$ramdir/$tbcbase"
+	if [ ! -f "$tbcram" ]; then
+		cp "$tbc" "$tbc.json" "$ramdir"
+	fi
+
+	if [ -f "$ldddir/tools/ld-comb-$system/main.cpp" ]; then
+		decoder="$ldddir/tools/ld-comb-$system/ld-comb-$system"
+		if [ "$usedecoder" = "ntsc3d" ]; then
+			decoder="$decoder --3d"
+		fi
+	else
+		decoder="$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder -f $usedecoder"
+	fi
+
+	# XXX Find a better way of writing this
+	if [ "$maxcpus" = "1" ]; then
+		benchchart measure -f "$benchfile" \
+			-r 1 -n 3 \
+			"$decoder $* $tbcram /dev/null"
+	else
+		benchchart measure -f "$benchfile" \
+			-r "1-$maxcpus" -n 3 \
+			"$decoder -t \$v $* $tbcram /dev/null"
 	fi
 }
 
@@ -464,6 +560,20 @@ run_test () {
 		# pr-motionN is a still frame from N seconds into the motion section.
 		num=$(echo "$testname" | sed s/pr-motion//)
 		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") -l 1
+		;;
+
+	# Performance tests
+	bench-ntsc2d)
+		benchmark ntsc "$GGV1069" ntsc2d
+		;;
+	bench-ntsc3d)
+		benchmark ntsc "$GGV1069" ntsc3d
+		;;
+	bench-pal2d)
+		benchmark pal "$GGV1011" pal2d
+		;;
+	bench-transform2d)
+		benchmark pal "$GGV1011" transform2d
 		;;
 
 	*)
