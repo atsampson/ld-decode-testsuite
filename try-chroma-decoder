@@ -356,7 +356,7 @@ GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars leon \
-	snellwilcox-n3d 3dmap1 3dmap2 3dmap3 \
+	snellwilcox-n3d nr-vbar-n3d 3dmap1 3dmap2 3dmap3 \
 	testcardg-t2d palbars-t2d \
 	pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
@@ -403,6 +403,10 @@ run_test () {
 		# Snell & Wilcox test pattern from "Video Essentials"
 		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --3d
 		;;
+	nr-vbar-n3d)
+		# The crosstalk test frames, testing response to shot changes.
+		decode ntsc "$GGV1069" --frame 113 --3d --stillframe 2 -l 5
+		;;
 	3dmap1)
 		# 3D map -- this should have motion
 		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 5 --3dmap
@@ -448,7 +452,7 @@ run_test () {
 	# Tests from GGV1069, Pioneer's NTSC Reference Disc
 	nr-vbar)
 		# Crosstalk check; also tests that --frame gets the right frame
-		decode ntsc "$GGV1069" --frame 115 -l 10
+		decode ntsc "$GGV1069" --frame 113 --stillframe 2 -l 5
 		;;
 	nr-multiburst)
 		decode ntsc "$GGV1069" --frame 951 -l 10
