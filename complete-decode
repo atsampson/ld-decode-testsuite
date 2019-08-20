@@ -8,15 +8,19 @@
 # FIXME: No-DOC option
 
 usage () {
-	echo >&2 "Usage: $0 [-d] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-dn] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
 deemph=
-while getopts "d" c; do
+dryrun=false
+while getopts "dn" c; do
 	case "$c" in
 	d)
 		deemph="deemph"
+		;;
+	n)
+		dryrun=true
 		;;
 	\?)
 		usage
@@ -36,7 +40,11 @@ else
 fi
 
 action () {
-	echo >&2 "Would do:" "$@"
+	if $dryrun; then
+		echo >&2 "Would do:" "$@"
+	else
+		"$@"
+	fi
 }
 
 if [ ! -f "$out.tbc" ]; then
