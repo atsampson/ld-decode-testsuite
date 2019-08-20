@@ -8,7 +8,7 @@
 # FIXME: No-DOC option
 
 usage () {
-	echo >&2 "Usage: $0 [-dp] LDS-FILE OUTPUT-BASE"
+	echo >&2 "Usage: $0 [-dp] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
@@ -29,11 +29,15 @@ while getopts "dp" c; do
 done
 shift $(expr $OPTIND - 1)
 
-if [ "$#" != 2 ]; then
+if [ "$#" = 1 ]; then
+	infile="$1"
+	out=$(dirname "$1")/out/$(basename "$1" .lds)
+elif [ "$#" = 2 ]; then
+	infile="$1"
+	out="$2"
+else
 	usage
 fi
-infile="$1"
-out="$2"
 
 action () {
 	echo "Would do:" "$@"
