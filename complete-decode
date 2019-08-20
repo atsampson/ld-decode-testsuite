@@ -35,34 +35,36 @@ fi
 infile="$1"
 out="$2"
 
-stage () {
-	name="$1"
-	shift
-
+action () {
 	echo "Would do:" "$@"
 }
 
-stage decode \
-	ld-decode.py --ntsc "$infile" "$out"
+if [ ! -f "$out.tbc" ]; then
+	action ld-decode.py --ntsc "$infile" "$out"
+fi
 
-stage copyjson \
-	cp "$out.tbc.json" "$out.tbc.json.orig"
+if [ ! -f "$out.tbc.json.orig" ]; then
+	# This doesn't produce a new file.
+	action cp "$out.tbc.json" "$out.tbc.json.orig_"
+	action ld-process-vbi -n "$out.tbc"
+	action mv "$out.tbc.json.orig_" "$out.tbc.json.orig"
+fi
 
-stage vbi \
-	ld-process-vbi -n "$out.tbc"
+if [ ! -f "$out.efm.pcm" ]; then
+	action ld-process-efm --noninteractive "$out".efm "$out".efm.pcm
+fi
 
-stage efm \
-	ld-process-efm --noninteractive "$out".efm "$out".efm.pcm
-
-stage postefm \
-	sox \
+if [ ! -f "$out.efm.flac" ]; then
+	action sox \
 		-t raw -e signed -b 16 -r 44100 -c 2 "$out".efm.pcm \
 		"$out".efm.flac \
 		$deemph \
 		stats
+fi
 
-stage doc \
-	ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+if [ ! -f "$out.doc" ]; then
+	action ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+fi
 
 if $usepipe; then
 	rgbfile=-
@@ -70,12 +72,13 @@ else
 	rgbfile="$out".rgb
 fi
 
-stage chroma \
-	ld-chroma-decoder "$out".doc "$rgbfile"
+if [ ! -f "$out.rgb" ]; then
+	action ld-chroma-decoder "$out".doc "$rgbfile"
+fi
 
-# Use yuvj444p for full range and no chroma subsampling.
-stage encode \
-	ffmpeg \
+if [ ! -f "$out.mkv" ]; then
+	# Use yuvj444p for full range and no chroma subsampling.
+	action ffmpeg \
 		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$rgbfile" \
 		-i "$out".efm.flac \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
@@ -86,3 +89,4 @@ stage encode \
 		-codec:a:0 copy \
 		-codec:a:1 flac \
 		-y "$out".mkv
+fi
