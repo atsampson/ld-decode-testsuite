@@ -8,19 +8,15 @@
 # FIXME: No-DOC option
 
 usage () {
-	echo >&2 "Usage: $0 [-dp] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-d] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
 deemph=
-usepipe=false
-while getopts "dp" c; do
+while getopts "d" c; do
 	case "$c" in
 	d)
 		deemph="deemph"
-		;;
-	p)
-		usepipe=true
 		;;
 	\?)
 		usage
@@ -40,7 +36,7 @@ else
 fi
 
 action () {
-	echo "Would do:" "$@"
+	echo >&2 "Would do:" "$@"
 }
 
 if [ ! -f "$out.tbc" ]; then
@@ -70,20 +66,11 @@ if [ ! -f "$out.doc" ]; then
 	action ld-dropout-correct --overcorrect "$out".tbc "$out".doc
 fi
 
-if $usepipe; then
-	rgbfile=-
-else
-	rgbfile="$out".rgb
-fi
-
-if [ ! -f "$out.rgb" ]; then
-	action ld-chroma-decoder "$out".doc "$rgbfile"
-fi
-
+# Use yuvj444p for full range and no chroma subsampling.
 if [ ! -f "$out.mkv" ]; then
-	# Use yuvj444p for full range and no chroma subsampling.
+	action ld-chroma-decoder "$out".doc | \
 	action ffmpeg \
-		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i "$rgbfile" \
+		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i - \
 		-i "$out".efm.flac \
 		-f s16le -ar 48000 -ac 2 -i "$out".pcm \
 		-map 0:0 -map 1:0 -map 2:0 \
