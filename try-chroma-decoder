@@ -165,7 +165,7 @@ decode () {
 		"$outdir/$testname.FAILED" \
 		"$outdir/$testname-input.png" \
 		"$outdir/$testname-output.png" \
-		"$outdir/$testname.avi"
+		"$outdir/$testname.mkv"
 
 	case "$system" in
 	ntsc)
@@ -252,9 +252,10 @@ decode () {
 		-i $rgb "$outdir/$testname-output.png"
 	if $videofiles; then
 		$ffmpegout -r $fps \
-			-i $rgb -b:v 15000k -aspect 4:3 \
-			-vcodec mpeg4 -flags +ilme+ildct \
-			"$outdir/$testname.avi"
+			-i $rgb \
+			-filter:v setfield=tff \
+			-codec:v libx264rgb -crf 16 -flags +ildct+ilme -aspect 4:3 \
+			"$outdir/$testname.mkv"
 	fi
 }
 
