@@ -5,17 +5,20 @@
 # FIXME: Options to select which sound channels to extract
 # FIXME: Detect PCM deemphasis automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
-# FIXME: No-DOC option
 
 usage () {
 	echo >&2 "Usage: $0 [-dn] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
+dropouts=false
 deemph=
 dryrun=false
-while getopts "dn" c; do
+while getopts "cdn" c; do
 	case "$c" in
+	c)
+		dropouts=true
+		;;
 	d)
 		deemph="deemph"
 		;;
@@ -71,13 +74,17 @@ if [ ! -f "$out.efm.flac" ]; then
 		stats
 fi
 
-if [ ! -f "$out.doc" ]; then
+if $dropouts && [ ! -f "$out.doc" ]; then
 	action ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+	corrected="$out".doc
+elif ! $dropouts; then
+	# Bypass the dropout corrector.
+	corrected="$out".tbc
 fi
 
 # Use yuvj444p for full range and no chroma subsampling.
 if [ ! -f "$out.mkv" ]; then
-	action ld-chroma-decoder "$out".doc | \
+	action ld-chroma-decoder "$corrected" | \
 	action ffmpeg \
 		-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i - \
 		-i "$out".efm.flac \
