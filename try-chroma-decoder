@@ -534,7 +534,15 @@ run_test () {
 		;;
 	pr-magenta)
 		decode pal "$GGV1011" --frame 6051 -l 10
-		# Other solid colours follow
+		;;
+	pr-blue)
+		decode pal "$GGV1011" --frame 6801 -l 10
+		;;
+	pr-red)
+		decode pal "$GGV1011" --frame 8001 -l 10
+		;;
+	pr-green)
+		decode pal "$GGV1011" --frame 8751 -l 10
 		;;
 	pr-window)
 		decode pal "$GGV1011" --frame 11301 -l 10
