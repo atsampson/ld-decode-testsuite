@@ -43,6 +43,7 @@ action () {
 	if $dryrun; then
 		echo >&2 "Would do:" "$@"
 	else
+		echo >&2 ">>>" "$@"
 		"$@"
 	fi
 }
