@@ -5,7 +5,7 @@
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
 usage () {
-	echo >&2 "Usage: $0 [-AcdDnp] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-AcdDnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
@@ -13,9 +13,10 @@ analogue=true
 digital=true
 dropouts=false
 deemph=()
+decoder=
 dryrun=false
 standard=ntsc
-while getopts "AcdDnp" c; do
+while getopts "Acdf:Dnp" c; do
 	case "$c" in
 	A)
 		analogue=false
@@ -25,6 +26,9 @@ while getopts "AcdDnp" c; do
 		;;
 	d)
 		deemph=(deemph)
+		;;
+	f)
+		decoder="$OPTARG"
 		;;
 	D)
 		digital=false
@@ -91,14 +95,22 @@ fi
 
 if $dropouts && [ ! -f "$out.doc" ]; then
 	action ld-dropout-correct --overcorrect "$out".tbc "$out".doc
-	corrected="$out".doc
-elif ! $dropouts; then
-	# Bypass the dropout corrector.
-	corrected="$out".tbc
 fi
 
 if [ ! -f "$out.mkv" ]; then
-	chargs=("$corrected")
+	chargs=()
+	if [ -n "$decoder" ]; then
+		chargs+=(-f "$decoder")
+		# XXX For now...
+		if [ "$decoder" = transform3d ]; then
+			chargs+=(--transform-mode level)
+		fi
+	fi
+	if $dropouts; then
+		chargs+=("$out".doc)
+	else
+		chargs+=("$out".tbc)
+	fi
 
 	ffargs=(-f rawvideo -pix_fmt rgb48)
 	if [ "$standard" = pal ]; then
