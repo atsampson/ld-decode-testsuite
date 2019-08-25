@@ -20,6 +20,7 @@ for f in \
 	"$ldddir/cx" \
 	"$ldddir/ld-cut.py" \
 	"$ldddir/ld-decode.py" \
+	"$ldddir/ld-ldf-reader" \
 	"$ldddir/scripts/ld-compress.sh" \
 	"$ldddir/tools/ld-analyse/ld-analyse" \
 	"$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder" \
