@@ -375,12 +375,15 @@ all_tests="\
 	pr-motion155-t3d pr-sweep-t3d \
 	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
-	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
+	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce \
 	pr-vbar pr-multiburst pr-white100 pr-black7.5 pr-pulsebar pr-stairstep pr-bars \
-	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp pr-motion \
+	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp \
 	pr-motion2 pr-motion4 pr-motion25 pr-motion54 pr-motion77 pr-motion88 pr-motion122 \
 	pr-motion123 pr-motion145 pr-motion155 \
 	"
+if $videofiles; then
+	all_tests="$all_tests nr-motion pr-motion"
+fi
 run_test () {
 	testname="$1"
 
