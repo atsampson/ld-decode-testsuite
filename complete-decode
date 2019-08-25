@@ -7,7 +7,7 @@
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
 usage () {
-	echo >&2 "Usage: $0 [-dn] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-cdn] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
