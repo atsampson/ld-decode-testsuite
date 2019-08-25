@@ -1,12 +1,11 @@
 #!/bin/bash -e
 # Run through the entire decoding process.
 
-# FIXME: PAL/NTSC
 # FIXME: Detect PCM deemphasis automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 
 usage () {
-	echo >&2 "Usage: $0 [-AcdDn] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-AcdDnp] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
@@ -15,7 +14,8 @@ digital=true
 dropouts=false
 deemph=()
 dryrun=false
-while getopts "AcdDn" c; do
+standard=ntsc
+while getopts "AcdDnp" c; do
 	case "$c" in
 	A)
 		analogue=false
@@ -31,6 +31,9 @@ while getopts "AcdDn" c; do
 		;;
 	n)
 		dryrun=true
+		;;
+	p)
+		standard=pal
 		;;
 	\?)
 		usage
@@ -49,6 +52,11 @@ else
 	usage
 fi
 
+if $analogue && $digital && [ "$standard" = pal ]; then
+	echo >&2 "PAL can't have both analogue and digital audio"
+	exit 1
+fi
+
 action () {
 	if $dryrun; then
 		echo >&2 "Would do:" "$@"
@@ -59,7 +67,7 @@ action () {
 }
 
 if [ ! -f "$out.tbc" ]; then
-	action ld-decode.py --ntsc "$infile" "$out"
+	action ld-decode.py "--$standard" "$infile" "$out"
 fi
 
 if [ ! -f "$out.tbc.json.orig" ]; then
@@ -92,7 +100,13 @@ fi
 if [ ! -f "$out.mkv" ]; then
 	chargs=("$corrected")
 
-	ffargs=(-f rawvideo -r 30000/1001 -pix_fmt rgb48 -s 760x488 -i -)
+	ffargs=(-f rawvideo -pix_fmt rgb48)
+	if [ "$standard" = pal ]; then
+		ffargs+=(-r 25 -s 928x576)
+	else
+		ffargs+=(-r 30000/1001 -s 760x488)
+	fi
+	ffargs+=(-i -)
 	streams=0
 	if $digital; then
 		ffargs+=(-i "$out".efm.flac)
