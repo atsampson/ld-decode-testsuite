@@ -279,6 +279,15 @@ benchmark () {
 			;;
 		esac
 	fi
+	if [ ! -f "$ldddir/tools/ld-chroma-decoder/transformpal3d.cpp" ]; then
+		case "$usedecoder" in
+		transform3d)
+			echo >&2 "Test skipped because no Transform 3D support: $testname"
+			return
+			;;
+		esac
+	fi
+	# XXX check for --transform-mode support
 
 	# Get the number of CPUs, and go a little beyond that in case that works better
 	maxcpus=$(grep ^processor /proc/cpuinfo | wc -l)
@@ -358,9 +367,12 @@ all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars leon \
 	snellwilcox-n3d nr-vbar-n3d 3dmap1 3dmap2 3dmap3 \
-	testcardg-t2d palbars-t2d \
+	testcardg-t2d testcardg-t2d-thresh0.3 testcardg-t2d-level palbars-t2d \
 	pr-motion2-t2d pr-motion25-t2d pr-motion122-t2d pr-motion123-t2d \
 	pr-motion155-t2d pr-sweep-t2d \
+	testcardg-t3d testcardg-t3d-thresh0.3 testcardg-t3d-level palbars-t3d \
+	pr-motion2-t3d pr-motion25-t3d pr-motion122-t3d pr-motion123-t3d \
+	pr-motion155-t3d pr-sweep-t3d \
 	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
 	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce nr-motion \
@@ -425,6 +437,14 @@ run_test () {
 	testcardg-t2d)
 		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1
 		;;
+	testcardg-t2d-thresh0.3)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1 \
+			--transform-mode threshold --transform-threshold 0.3
+		;;
+	testcardg-t2d-level)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1 \
+			--transform-mode level
+		;;
 	palbars-t2d)
 		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform2d -l 1
 		;;
@@ -434,6 +454,29 @@ run_test () {
 		;;
 	pr-sweep-t2d)
 		decode pal "$GGV1011" --frame 14301 --decoder transform2d -l 1
+		;;
+
+	# transform3d decoder
+	testcardg-t3d)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3d -l 1
+		;;
+	testcardg-t3d-thresh0.3)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3d -l 1 \
+			--transform-mode threshold --transform-threshold 0.3
+		;;
+	testcardg-t3d-level)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3d -l 1 \
+			--transform-mode level
+		;;
+	palbars-t3d)
+		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform3d -l 1
+		;;
+	pr-motion*-t3d)
+		num=$(echo "$testname" | sed -e s/pr-motion// -e s/-t3d//)
+		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") --decoder transform3d -l 1
+		;;
+	pr-sweep-t3d)
+		decode pal "$GGV1011" --frame 14301 --decoder transform3d -l 1
 		;;
 
 	# Tests with artificial noise added
@@ -587,6 +630,9 @@ run_test () {
 		;;
 	bench-transform2d)
 		benchmark pal "$GGV1011" transform2d
+		;;
+	bench-transform3d)
+		benchmark pal "$GGV1011" transform3d
 		;;
 
 	*)
