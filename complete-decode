@@ -3,9 +3,10 @@
 
 # FIXME: Detect PCM deemphasis automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
+# FIXME: Clean up intermediate files (.doc, .map) once complete
 
 usage () {
-	echo >&2 "Usage: $0 [-AcdDnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-AcdDmnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
@@ -14,9 +15,10 @@ digital=true
 dropouts=false
 deemph=()
 decoder=
+discmap=false
 dryrun=false
 standard=ntsc
-while getopts "Acdf:Dnp" c; do
+while getopts "Acdf:Dmnp" c; do
 	case "$c" in
 	A)
 		analogue=false
@@ -32,6 +34,9 @@ while getopts "Acdf:Dnp" c; do
 		;;
 	D)
 		digital=false
+		;;
+	m)
+		discmap=true
 		;;
 	n)
 		dryrun=true
@@ -93,8 +98,20 @@ if $digital && [ ! -f "$out.efm.flac" ]; then
 		stats
 fi
 
-if $dropouts && [ ! -f "$out.doc" ]; then
-	action ld-dropout-correct --overcorrect "$out".tbc "$out".doc
+prevtbc="$out".tbc
+
+if $dropouts; then
+	if [ ! -f "$out.doc" ]; then
+		action ld-dropout-correct --overcorrect "$prevtbc" "$out".doc
+	fi
+	prevtbc="$out".doc
+fi
+
+if $discmap; then
+	if [ ! -f "$out.map" ]; then
+		action ld-discmap "$prevtbc" "$out".map
+	fi
+	prevtbc="$out".map
 fi
 
 if [ ! -f "$out.mkv" ]; then
@@ -106,11 +123,7 @@ if [ ! -f "$out.mkv" ]; then
 			chargs+=(--transform-mode level)
 		fi
 	fi
-	if $dropouts; then
-		chargs+=("$out".doc)
-	else
-		chargs+=("$out".tbc)
-	fi
+	chargs+=("$prevtbc")
 
 	ffargs=(-f rawvideo -pix_fmt rgb48)
 	if [ "$standard" = pal ]; then
