@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+# Read composite input from hacktv, and write a simulated .tbc file.
+# Changes this needs to make:
+# - Scale hacktv's black/white levels to match ld-decode's
+# - Pad hacktv's 1135x625 frame to match ld-decode's 1135x626 frame
+# Usage: hacktv -o - -m pal -s 17734472 input.avi | hacktv-to-tbc fake.tbc
+# XXX Open hacktv down a pipe and forward args to it
+# XXX Chroma doesn't work properly at 4fSC (it does mostly at 28MHz)
+# XXX NTSC
+
+import json
+import numpy
+import sys
+
+filename_tbc = sys.argv[1]
+filename_json = filename_tbc + ".json"
+
+# Parameters we're trying to generate (copied from ld-decode output)
+videoParameters = {
+    "activeVideoEnd": 1107.0,
+    "activeVideoStart": 185.0,
+    "black16bIre": 16384.0,
+    "colourBurstEnd": 138.0,
+    "colourBurstStart": 98.0,
+    "fieldHeight": 313,
+    "fieldWidth": 1135,
+    "fsc": 4433618,
+    "isSourcePal": True,
+    "numberOfSequentialFields": 0,
+    "sampleRate": 17734472,
+    "white16bIre": 54016.0,
+    }
+
+# Parameters from vid_config_pal in hacktv's video.c (where they differ from the above)
+hacktv_lines = 625
+hacktv_white_level = 0.70
+hacktv_black_level = 0.00
+hacktv_sync_level = -0.30
+hacktv_burst_level = 3.0 / 7.0
+
+# Dummy black line to pad the output with.
+# (In a real .tbc this is a copy of the first line of the next field...)
+black_line = numpy.full(videoParameters["fieldWidth"],
+                        videoParameters["black16bIre"],
+                        dtype=numpy.uint16)
+
+# Convert the video
+fields = []
+with open(filename_tbc, "wb") as f:
+    for i in range(10):
+        # Read two fields from hacktv
+        rawdata = sys.stdin.buffer.read(videoParameters["fieldWidth"] * hacktv_lines * 2)
+        data = numpy.frombuffer(rawdata, numpy.int16).astype(float)
+
+        # Scale to match the levels in videoParameters
+        data -= hacktv_black_level * 32767
+        data /= hacktv_white_level * 32767
+        data *= (videoParameters["white16bIre"] - videoParameters["black16bIre"])
+        data += videoParameters["black16bIre"]
+
+        # Write to the output, padded to the right height
+        data.astype(numpy.uint16).tofile(f)
+        for i in range((2 * videoParameters["fieldHeight"]) - hacktv_lines):
+            black_line.tofile(f)
+
+        # Generate JSON info for fields
+        for i in range(2):
+            videoParameters["numberOfSequentialFields"] += 1
+            fields.append({
+                "isFirstField": i == 0,
+                "syncConf": 100,
+                "seqNo": videoParameters["numberOfSequentialFields"],
+                "diskLoc": videoParameters["numberOfSequentialFields"],
+                "medianBurstIRE": 100.0 * hacktv_burst_level / 2,
+                "decodeFaults": 0,
+                "vitsMetrics": {"wSNR": 42.0, "bPSNR": 42.0},
+                "vbi": {"vbiData": [42, 42, 42]},
+                "audioSamples": 42,
+                })
+
+# Write the JSON
+with open(filename_json, "w") as f:
+    json.dump({
+        "videoParameters": videoParameters,
+        "fields": fields,
+        }, f)
