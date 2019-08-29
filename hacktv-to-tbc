@@ -1,19 +1,17 @@
 #!/usr/bin/python3
-# Read composite input from hacktv, and write a simulated .tbc file.
+# Run hacktv, converting its output into a simulated .tbc file.
 # Changes this needs to make:
 # - Scale hacktv's black/white levels to match ld-decode's
 # - Pad hacktv's 1135x625 frame to match ld-decode's 1135x626 frame
-# Usage: hacktv -o - -m pal -s 17734472 input.avi | hacktv-to-tbc fake.tbc
-# XXX Open hacktv down a pipe and forward args to it
+# Usage: hacktv-to-tbc fake.tbc input.avi
 # XXX Chroma doesn't work properly at 4fSC (it does mostly at 28MHz)
 # XXX NTSC
 
 import json
 import numpy
+import optparse
+import subprocess
 import sys
-
-filename_tbc = sys.argv[1]
-filename_json = filename_tbc + ".json"
 
 # Parameters we're trying to generate (copied from ld-decode output)
 videoParameters = {
@@ -44,12 +42,38 @@ black_line = numpy.full(videoParameters["fieldWidth"],
                         videoParameters["black16bIre"],
                         dtype=numpy.uint16)
 
+# Parse command-line options
+parser = optparse.OptionParser(usage="usage: %prog [options] TBC-FILE [HACKTV-ARGS ...]")
+parser.disable_interspersed_args()
+parser.add_option("-l", dest="length", metavar="FRAMES",
+                  help="maximum number of frames to process")
+options, args = parser.parse_args(sys.argv[1:])
+max_length = -1
+if options.length:
+    max_length = int(options.length)
+
+# First positional arg is TBC filename
+if len(args) < 1:
+    parser.error("no output filename specified")
+filename_tbc = args[0]
+filename_json = filename_tbc + ".json"
+
+# Remaining positional args are forwarded to hacktv
+hacktv_cmd = [
+    "hacktv",
+    "-o", "-",
+    "-m", "pal",
+    "-s", str(videoParameters["sampleRate"]),
+    ]
+hacktv_cmd += args[1:]
+hacktv = subprocess.Popen(hacktv_cmd, stdout=subprocess.PIPE)
+
 # Convert the video
 fields = []
 with open(filename_tbc, "wb") as f:
-    for i in range(10):
+    while True:
         # Read two fields from hacktv
-        rawdata = sys.stdin.buffer.read(videoParameters["fieldWidth"] * hacktv_lines * 2)
+        rawdata = hacktv.stdout.read(videoParameters["fieldWidth"] * hacktv_lines * 2)
         data = numpy.frombuffer(rawdata, numpy.int16).astype(float)
 
         # Scale to match the levels in videoParameters
@@ -77,6 +101,13 @@ with open(filename_tbc, "wb") as f:
                 "vbi": {"vbiData": [42, 42, 42]},
                 "audioSamples": 42,
                 })
+
+        # Limit output length
+        if max_length > 0 and (videoParameters["numberOfSequentialFields"] / 2) >= max_length:
+            break
+
+hacktv.stdout.close()
+hacktv.wait()
 
 # Write the JSON
 with open(filename_json, "w") as f:
