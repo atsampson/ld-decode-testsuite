@@ -4,7 +4,6 @@
 # - Scale hacktv's black/white levels to match ld-decode's
 # - Pad hacktv's 1135x625 frame to match ld-decode's 1135x626 frame
 # Usage: hacktv-to-tbc fake.tbc input.avi
-# XXX Chroma doesn't work properly at 4fSC (it does mostly at 28MHz)
 # XXX NTSC
 
 import json
@@ -25,7 +24,10 @@ videoParameters = {
     "fsc": 4433618,
     "isSourcePal": True,
     "numberOfSequentialFields": 0,
-    "sampleRate": 17734472,
+    # XXX To match real ld-decode, this should be:
+    #   "sampleRate": 17734472,
+    # but hacktv adjusts the sample rate internally.
+    "sampleRate": 17734375,
     "white16bIre": 54016.0,
     }
 
@@ -95,6 +97,7 @@ with open(filename_tbc, "wb") as f:
                 "syncConf": 100,
                 "seqNo": videoParameters["numberOfSequentialFields"],
                 "diskLoc": videoParameters["numberOfSequentialFields"],
+                # This value is sqrt(2) * RMS(samples in burst), i.e. half the P-P amplitude
                 "medianBurstIRE": 100.0 * hacktv_burst_level / 2,
                 "decodeFaults": 0,
                 "vitsMetrics": {"wSNR": 42.0, "bPSNR": 42.0},
