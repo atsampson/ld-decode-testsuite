@@ -83,6 +83,7 @@ with open(filename_tbc, "wb") as f:
         data /= hacktv_white_level * 32767
         data *= (videoParameters["white16bIre"] - videoParameters["black16bIre"])
         data += videoParameters["black16bIre"]
+        data = numpy.clip(data, 0, 65535)
 
         # Write to the output, padded to the right height
         data.astype(numpy.uint16).tofile(f)
