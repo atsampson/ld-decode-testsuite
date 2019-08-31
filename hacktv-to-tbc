@@ -4,7 +4,7 @@
 # - Scale hacktv's black/white levels to match ld-decode's
 # - Pad hacktv's 1135x625 frame to match ld-decode's 1135x626 frame
 # Usage: hacktv-to-tbc fake.tbc input.avi
-# XXX NTSC
+# XXX NTSC colours aren't correct - sample rate?
 
 import json
 import numpy
@@ -12,47 +12,78 @@ import optparse
 import subprocess
 import sys
 
-# Parameters we're trying to generate (copied from ld-decode output)
-videoParameters = {
-    "activeVideoEnd": 1107.0,
-    "activeVideoStart": 185.0,
-    "black16bIre": 16384.0,
-    "colourBurstEnd": 138.0,
-    "colourBurstStart": 98.0,
-    "fieldHeight": 313,
-    "fieldWidth": 1135,
-    "fsc": 4433618,
-    "isSourcePal": True,
-    "numberOfSequentialFields": 0,
-    # XXX To match real ld-decode, this should be:
-    #   "sampleRate": 17734472,
-    # but hacktv adjusts the sample rate internally.
-    "sampleRate": 17734375,
-    "white16bIre": 54016.0,
-    }
+# Parse command-line options
+parser = optparse.OptionParser(usage="usage: %prog [options] TBC-FILE [HACKTV-ARGS ...]")
+parser.disable_interspersed_args()
+parser.add_option("-l", dest="length", metavar="FRAMES",
+                  help="maximum number of frames to process")
+parser.add_option("-n", "--ntsc", dest="standard", action="store_const", const="ntsc",
+                  help="generate NTSC output")
+parser.add_option("-p", "--pal", dest="standard", action="store_const", const="pal",
+                  help="generate PAL output")
+options, args = parser.parse_args(sys.argv[1:])
+max_length = -1
+if options.length:
+    max_length = int(options.length)
+if options.standard is None:
+    parser.error("you must specify either --pal or --ntsc")
 
-# Parameters from vid_config_pal in hacktv's video.c (where they differ from the above)
-hacktv_lines = 625
-hacktv_white_level = 0.70
-hacktv_black_level = 0.00
-hacktv_sync_level = -0.30
-hacktv_burst_level = 3.0 / 7.0
+if options.standard == "pal":
+    # Parameters we're trying to generate (copied from ld-decode output)
+    videoParameters = {
+        "activeVideoEnd": 1107.0,
+        "activeVideoStart": 185.0,
+        "black16bIre": 16384.0,
+        "colourBurstEnd": 138.0,
+        "colourBurstStart": 98.0,
+        "fieldHeight": 313,
+        "fieldWidth": 1135,
+        "fsc": 4433618,
+        "isSourcePal": True,
+        "numberOfSequentialFields": 0,
+        # XXX To match real ld-decode, this should be:
+        #   "sampleRate": 17734472,
+        # but hacktv adjusts the sample rate internally.
+        "sampleRate": 17734375,
+        "white16bIre": 54016.0,
+        }
+
+    # Parameters from vid_config_pal in hacktv's video.c (where they differ from the above)
+    hacktv_lines = 625
+    hacktv_white_level = 0.70
+    hacktv_black_level = 0.00
+    hacktv_sync_level = -0.30
+    hacktv_burst_level = 3.0 / 7.0
+else:
+    # Parameters we're trying to generate (copied from ld-decode output)
+    videoParameters = {
+        "activeVideoEnd": 887.0,
+        "activeVideoStart": 134.0,
+        "black16bIre": 18048.0,
+        "colourBurstEnd": 110.0,
+        "colourBurstStart": 74.0,
+        "fieldHeight": 263,
+        "fieldWidth": 910,
+        "fsc": 3579545,
+        "isSourcePal": False,
+        "numberOfSequentialFields": 0,
+        # XXX Should be: "sampleRate": 14318180,
+        "sampleRate": 14318181.818182,
+        "white16bIre": 51200.0,
+        }
+
+    # Parameters from vid_config_ntsc in hacktv's video.c (where they differ from the above)
+    hacktv_lines = 525
+    hacktv_white_level = 0.70
+    hacktv_black_level = 0.0525
+    hacktv_sync_level = -0.30
+    hacktv_burst_level = 4.0 / 10.0
 
 # Dummy black line to pad the output with.
 # (In a real .tbc this is a copy of the first line of the next field...)
 black_line = numpy.full(videoParameters["fieldWidth"],
                         videoParameters["black16bIre"],
                         dtype=numpy.uint16)
-
-# Parse command-line options
-parser = optparse.OptionParser(usage="usage: %prog [options] TBC-FILE [HACKTV-ARGS ...]")
-parser.disable_interspersed_args()
-parser.add_option("-l", dest="length", metavar="FRAMES",
-                  help="maximum number of frames to process")
-options, args = parser.parse_args(sys.argv[1:])
-max_length = -1
-if options.length:
-    max_length = int(options.length)
 
 # First positional arg is TBC filename
 if len(args) < 1:
@@ -64,7 +95,7 @@ filename_json = filename_tbc + ".json"
 hacktv_cmd = [
     "hacktv",
     "-o", "-",
-    "-m", "pal",
+    "-m", options.standard,
     "-s", str(videoParameters["sampleRate"]),
     ]
 hacktv_cmd += args[1:]
@@ -72,6 +103,7 @@ hacktv = subprocess.Popen(hacktv_cmd, stdout=subprocess.PIPE)
 
 # Convert the video
 fields = []
+numFields = 0
 with open(filename_tbc, "wb") as f:
     while True:
         # Read two fields from hacktv
@@ -92,28 +124,32 @@ with open(filename_tbc, "wb") as f:
 
         # Generate JSON info for fields
         for i in range(2):
-            videoParameters["numberOfSequentialFields"] += 1
-            fields.append({
+            numFields += 1
+            field = {
                 "isFirstField": i == 0,
                 "syncConf": 100,
-                "seqNo": videoParameters["numberOfSequentialFields"],
-                "diskLoc": videoParameters["numberOfSequentialFields"],
+                "seqNo": numFields,
+                "diskLoc": numFields,
                 # This value is sqrt(2) * RMS(samples in burst), i.e. half the P-P amplitude
                 "medianBurstIRE": 100.0 * hacktv_burst_level / 2,
                 "decodeFaults": 0,
                 "vitsMetrics": {"wSNR": 42.0, "bPSNR": 42.0},
                 "vbi": {"vbiData": [42, 42, 42]},
                 "audioSamples": 42,
-                })
+                }
+            if options.standard == "ntsc":
+                field["fieldPhaseID"] = ((numFields - 1) % 4) + 1
+            fields.append(field)
 
         # Limit output length
-        if max_length > 0 and (videoParameters["numberOfSequentialFields"] / 2) >= max_length:
+        if max_length > 0 and (numFields / 2) >= max_length:
             break
 
 hacktv.stdout.close()
 hacktv.wait()
 
 # Write the JSON
+videoParameters["numberOfSequentialFields"] = numFields
 with open(filename_json, "w") as f:
     json.dump({
         "videoParameters": videoParameters,
