@@ -107,7 +107,11 @@ numFields = 0
 with open(filename_tbc, "wb") as f:
     while True:
         # Read two fields from hacktv
-        rawdata = hacktv.stdout.read(videoParameters["fieldWidth"] * hacktv_lines * 2)
+        rawsize = videoParameters["fieldWidth"] * hacktv_lines * 2
+        rawdata = hacktv.stdout.read(rawsize)
+        if len(rawdata) < rawsize:
+            # End of file
+            break
         data = numpy.frombuffer(rawdata, numpy.int16).astype(float)
 
         # Scale to match the levels in videoParameters
