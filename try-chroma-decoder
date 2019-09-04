@@ -99,6 +99,7 @@ decode () {
 	use3d=
 	usedecoder="${system}2d"
 	noise=
+	lddargs=
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -129,6 +130,11 @@ decode () {
 			# Add random noise to the TBC
 			noise="$2"
 			shift 2
+			;;
+		--ldd-*)
+			# Pass argument to ld-decode
+			lddargs="$lddargs ${1#--ldd}"
+			shift 1
 			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
@@ -177,7 +183,7 @@ decode () {
 			outputsize=760x488
 		fi
 		fps=30
-		lddargs="--ntsc"
+		lddargs="$lddargs --ntsc"
 		;;
 	pal)
 		inputsize=1135x626
@@ -187,7 +193,7 @@ decode () {
 			outputsize=928x576
 		fi
 		fps=25
-		lddargs="--pal"
+		lddargs="$lddargs --pal"
 		;;
 	esac
 
