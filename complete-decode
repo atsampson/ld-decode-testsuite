@@ -7,7 +7,26 @@
 # FIXME: Clean up intermediate files (.doc, .map) once complete
 
 usage () {
-	echo >&2 "Usage: $0 [-3AcdDmnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
+	cat >&2 <<EOF
+Usage: $0 [options] INPUT-FILE [OUTPUT-BASE]
+$0 - Decode a LaserDisc image using ld-decode's tools
+
+Options:
+  -p               Disc has PAL video (default NTSC)
+  -A               Disc has no analogue audio
+  -D               Disc has no digital audio
+  -d               Force deemphasis of digital audio
+  -3               Disc has AC3 audio (and no right analogue channel)
+  -c               Use ld-dropout-correct
+  -m               Use ld-discmap
+  -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
+  -n               Dry-run mode; show what will be done
+
+INPUT-FILE is the RF capture, typically a .lds file.
+
+OUTPUT-BASE is the basename of the output files; if INPUT-FILE is
+"sample.lds", it will default to "out/sample".
+EOF
 	exit 1
 }
 
