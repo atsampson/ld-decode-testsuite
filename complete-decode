@@ -1,7 +1,6 @@
 #!/bin/bash -e
 # Run through the entire decoding process.
 
-# FIXME: Detect PCM deemphasis automatically
 # FIXME: Detect CX decoding automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 # FIXME: Clean up intermediate files (.doc, .map) once complete
@@ -15,7 +14,6 @@ Options:
   -p               Disc has PAL video (default NTSC)
   -A               Disc has no analogue audio
   -D               Disc has no digital audio
-  -d               Force deemphasis of digital audio
   -3               Disc has AC3 audio (and no right analogue channel)
   -c               Use ld-dropout-correct
   -m               Use ld-discmap
@@ -34,12 +32,11 @@ ac3=false
 analogue=true
 digital=true
 dropouts=false
-deemph=false
 decoder=
 discmap=false
 dryrun=false
 standard=ntsc
-while getopts "3Acdf:Dmnp" c; do
+while getopts "3Acf:Dmnp" c; do
 	case "$c" in
 	3)
 		ac3=true
@@ -49,9 +46,6 @@ while getopts "3Acdf:Dmnp" c; do
 		;;
 	c)
 		dropouts=true
-		;;
-	d)
-		deemph=true
 		;;
 	f)
 		decoder="$OPTARG"
@@ -134,10 +128,14 @@ fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
 	effects=()
-	if $deemph; then
+	# Assume the whole digital audio stream needs de-emphasis if
+	# ld-process-efm found more than a handful of preemphasised frames.
+	preemp_frames=$( (grep 'Total Preemp Frames' "$out".efm.log || echo ':0') | sed -e 's/.*: *//' -e 'q')
+	if [ "$preemp_frames" -gt 10 ]; then
 		effects+=(deemph)
 	fi
 	effects+=(stats)
+
 	action sox \
 		-t raw -e signed -b 16 -r 44100 -c 2 "$out".digital.pcm \
 		"$out".digital.flac \
@@ -151,6 +149,7 @@ if $analogue && [ ! -f "$out.analogue.flac" ]; then
 		effects+=(remix 1)
 	fi
 	effects+=(stats)
+
 	action sox \
 		-t raw -e signed -b 16 -r 48000 -c 2 "$out".pcm \
 		"$out".analogue.flac \
