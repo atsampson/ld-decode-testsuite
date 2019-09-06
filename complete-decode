@@ -7,20 +7,24 @@
 # FIXME: Clean up intermediate files (.doc, .map) once complete
 
 usage () {
-	echo >&2 "Usage: $0 [-AcdDmnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
+	echo >&2 "Usage: $0 [-3AcdDmnp] [-f DECODER] LDS-FILE [OUTPUT-BASE]"
 	exit 1
 }
 
+ac3=false
 analogue=true
 digital=true
 dropouts=false
-deemph=()
+deemph=false
 decoder=
 discmap=false
 dryrun=false
 standard=ntsc
-while getopts "Acdf:Dmnp" c; do
+while getopts "3Acdf:Dmnp" c; do
 	case "$c" in
+	3)
+		ac3=true
+		;;
 	A)
 		analogue=false
 		;;
@@ -28,7 +32,7 @@ while getopts "Acdf:Dmnp" c; do
 		dropouts=true
 		;;
 	d)
-		deemph=(deemph)
+		deemph=true
 		;;
 	f)
 		decoder="$OPTARG"
@@ -66,6 +70,10 @@ if $analogue && $digital && [ "$standard" = pal ]; then
 	echo >&2 "PAL can't have both analogue and digital audio"
 	exit 1
 fi
+if $ac3 && [ "$standard" = pal ]; then
+	echo >&2 "PAL can't have AC3"
+	exit 1
+fi
 
 action () {
 	if $dryrun; then
@@ -92,18 +100,28 @@ if $digital && [ ! -f "$out.digital.pcm" ]; then
 fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
+	effects=()
+	if $deemph; then
+		effects+=(deemph)
+	fi
+	effects+=(stats)
 	action sox \
 		-t raw -e signed -b 16 -r 44100 -c 2 "$out".digital.pcm \
 		"$out".digital.flac \
-		"${deemph[@]}" \
-		stats
+		"${effects[@]}"
 fi
 
 if $analogue && [ ! -f "$out.analogue.flac" ]; then
+	effects=()
+	if $ac3; then
+		# Drop the right channel.
+		effects+=(remix 1)
+	fi
+	effects+=(stats)
 	action sox \
 		-t raw -e signed -b 16 -r 48000 -c 2 "$out".pcm \
 		"$out".analogue.flac \
-		stats
+		"${effects[@]}"
 fi
 
 prevtbc="$out".tbc
