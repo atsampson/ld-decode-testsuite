@@ -2,6 +2,7 @@
 # Run through the entire decoding process.
 
 # FIXME: Detect PCM deemphasis automatically
+# FIXME: Detect CX decoding automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 # FIXME: Clean up intermediate files (.doc, .map) once complete
 
@@ -86,15 +87,22 @@ if [ ! -f "$out.tbc.json.orig" ]; then
 	action mv "$out.tbc.json.orig_" "$out.tbc.json.orig"
 fi
 
-if $digital && [ ! -f "$out.efm.pcm" ]; then
-	action ld-process-efm --noninteractive "$out".efm "$out".efm.pcm
+if $digital && [ ! -f "$out.digital.pcm" ]; then
+	action ld-process-efm --noninteractive "$out".efm "$out".digital.pcm
 fi
 
-if $digital && [ ! -f "$out.efm.flac" ]; then
+if $digital && [ ! -f "$out.digital.flac" ]; then
 	action sox \
-		-t raw -e signed -b 16 -r 44100 -c 2 "$out".efm.pcm \
-		"$out".efm.flac \
+		-t raw -e signed -b 16 -r 44100 -c 2 "$out".digital.pcm \
+		"$out".digital.flac \
 		"${deemph[@]}" \
+		stats
+fi
+
+if $analogue && [ ! -f "$out.analogue.flac" ]; then
+	action sox \
+		-t raw -e signed -b 16 -r 48000 -c 2 "$out".pcm \
+		"$out".analogue.flac \
 		stats
 fi
 
@@ -134,12 +142,12 @@ if [ ! -f "$out.mkv" ]; then
 	ffargs+=(-i -)
 	streams=0
 	if $digital; then
-		ffargs+=(-i "$out".efm.flac)
+		ffargs+=(-i "$out".digital.flac)
 		digstream=$streams
 		streams=$(($streams + 1))
 	fi
 	if $analogue; then
-		ffargs+=(-f s16le -ar 48000 -ac 2 -i "$out".pcm)
+		ffargs+=(-i "$out".analogue.flac)
 		anastream=$streams
 		streams=$(($streams + 1))
 	fi
@@ -156,7 +164,7 @@ if [ ! -f "$out.mkv" ]; then
 		ffargs+=(-codec:a:$digstream copy)
 	fi
 	if $analogue; then
-		ffargs+=(-codec:a:$anastream flac)
+		ffargs+=(-codec:a:$anastream copy)
 	fi
 	ffargs+=(-y "$out".mkv)
 
