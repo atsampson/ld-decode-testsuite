@@ -77,7 +77,7 @@ shift $(expr $OPTIND - 1)
 
 if [ "$#" = 1 ]; then
 	infile="$1"
-	out=$(dirname "$1")/out/$(basename "$1" .lds)
+	out=$(dirname "$1")/out/$(echo "$1" | sed 's/\.\(lds\|ldf\|r8\|r16\|raw\.oga\)$//')
 elif [ "$#" = 2 ]; then
 	infile="$1"
 	out="$2"
