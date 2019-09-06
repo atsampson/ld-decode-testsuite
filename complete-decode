@@ -97,10 +97,24 @@ fi
 action () {
 	if $dryrun; then
 		echo >&2 "Would do:" "$@"
-	else
-		echo >&2 ">>>" "$@"
-		"$@"
+		return
 	fi
+
+	echo >&2 ">>>" "$@"
+	case "$1" in
+	ld-decode.py)
+		"$@" 2>&1 | tee "$out".decode.log
+		;;
+	ld-process-efm)
+		"$@" 2>&1 | tee "$out".efm.log
+		;;
+	ld-discmap)
+		"$@" 2>&1 | tee "$out".discmap.log
+		;;
+	*)
+		"$@"
+		;;
+	esac
 }
 
 if [ ! -f "$out.tbc" ]; then
