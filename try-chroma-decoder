@@ -88,6 +88,20 @@ make_tbc () {
 	verbose $ldddir/ld-decode.py "$@" "$lds" "${tbc%.tbc}"
 }
 
+# Generate a .tbc file using hacktv.
+make_hacktv_tbc () {
+	tbc="$1"
+	system="$2"
+	length="$3"
+	shift 3
+
+	if [ -f "$tbc" ]; then
+		return
+	fi
+
+	verbose $testsuitedir/hacktv-to-tbc "--$system" -l "$length" "$tbc" -G 1.0 "$@"
+}
+
 # Chroma-decode a capture.
 decode () {
 	system="$1"
@@ -100,6 +114,8 @@ decode () {
 	usedecoder="${system}2d"
 	noise=
 	lddargs=
+	tbcsource=ld-decode
+	hacktvlength=0
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -136,6 +152,12 @@ decode () {
 			lddargs="$lddargs ${1#--ldd}"
 			shift 1
 			;;
+		--hacktv)
+			# Use hacktv rather than ld-decode, giving a length in frames
+			tbcsource=hacktv
+			hacktvlength="$2"
+			shift 2
+			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
 			break
@@ -148,10 +170,17 @@ decode () {
 		return
 	fi
 
-	if ! [ -f "$lds" ]; then
-		echo >&2 "Test skipped because source file is missing: $testname"
-		return
-	fi
+	case "$lds" in
+	test:*)
+		# hacktv's internal source
+		;;
+	*)
+		if ! [ -f "$lds" ]; then
+			echo >&2 "Test skipped because source file is missing: $testname"
+			return
+		fi
+		;;
+	esac
 
 	if [ ! -f "$ldddir/tools/ld-chroma-decoder/transformpal.cpp" ]; then
 		case "$usedecoder" in
@@ -206,7 +235,15 @@ decode () {
 	# Name the cached .tbc after the .lds file, for reuse between tests.
 	tbc="$cachedir/$(echo "$lds" | sed 's,/,_,g').tbc"
 	rgb="$tmpdir/$testname.rgb"
-	make_tbc "$tbc" "$lds" $lddargs
+
+	case "$tbcsource" in
+	ld-decode)
+		make_tbc "$tbc" "$lds" $lddargs
+		;;
+	hacktv)
+		make_hacktv_tbc "$tbc" "$system" "$hacktvlength" "$lds"
+		;;
+	esac
 
 	if [ -n "$noise" ]; then
 		noisytbc="$tbc.noise$noise"
@@ -642,6 +679,14 @@ run_test () {
 		# pr-motionN is a still frame from N seconds into the motion section.
 		num=$(echo "$testname" | sed s/pr-motion//)
 		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") -l 1
+		;;
+
+	# Synthetic tests using hacktv
+	hp-bars)
+		decode pal test:colourbars --hacktv 16
+		;;
+	hp-testcardj)
+		decode pal "/n/stuff/tv/Testcards/tcj-43.mkv" --hacktv 16
 		;;
 
 	# Performance tests
