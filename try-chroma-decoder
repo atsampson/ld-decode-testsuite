@@ -2,7 +2,21 @@
 # Test the chroma decoder, capturing the output.
 
 usage () {
-	echo >&2 "Usage: $0 [-a] [-f DECODER] [-I] [-V] [-n VERSION] [-s SYSTEM] [TEST ...]"
+	cat >&2 <<EOF
+Usage: $0 [options] [TEST ...]"
+$0 - Test ld-chroma-decoder
+
+Options:
+  -n NAME          Name of output subdirectory (default: tmp)
+  -a               Only run tests that haven't already been run
+  -s SYSTEM        Only run tests for a particular system (pal or ntsc)
+  -f DECODER       Select chroma decoder (use with -s)
+  -o OPTIONS       Pass extra options to ld-chroma-decoder
+  -I               Don't generate undecoded input images
+  -V               Don't generate videos of output
+
+Read this script for the list of possible tests.
+EOF
 	exit 1
 }
 
