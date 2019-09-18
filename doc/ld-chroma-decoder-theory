@@ -1,0 +1,143 @@
+# Theory behind PalColour
+
+The aim here was to work out the effects on amplitude of the various stages of
+PalColour's processing, to explain some of the factors in the original code.
+
+## Lookup tables
+
+Composite input = Y + U * sin(w) + Vsw * V * cos(w)
+  where
+    Vsw = 1 or -1 depending on line
+    w = 2 * pi * fSC * time  (X coordinate effectively)
+    Y = blacklevel + Y' / whitescale
+    U = U' / whitescale
+    V = V' / whitescale
+
+sine[w] = rA * sin(w)
+cosine[w] = rA * cos(w)
+  where
+    rA = refAmpl
+
+Identity:
+sin(w) * cos(w)
+  = 0.5 * sin(2w) + 0.5 * sin(0)
+  = 0.5 * sin(2w)
+sin2(w)
+  = 0.5 - 0.5 * cos(2w)
+cos2(w)
+  = 0.5 + 0.5 * cos(2w)
+sin2(w) + cos2(w) = 1
+
+## Y/U/V filters
+
+This all assumes no phase errors -- if there are phase errors, summing lines
+will result in lower saturation.
+
+Filters are low-pass at well below fSC and have unity gain at DC. (I checked!)
+
+Input to PY filter
+  = (Y + U * sin(w) + Vsw * V * cos(w)) * rA * sin(w)
+  = (Y * rA * sin(w)) + (U * rA * sin2(w)) + (Vsw * V * rA * sin(w) * cos(w))
+  = (Y * rA * sin(w)) + (U * rA * (0.5 - 0.5 * cos(2w))) + (Vsw * V * rA * sin(w) * cos(w))
+  = (Y * rA * sin(w)) + (U * rA * 0.5) + (U * rA * - 0.5 * cos(2w))) + (Vsw * V * rA * sin(w) * cos(w))
+  = (Y * rA * sin(w)) + (U * rA * 0.5) + (U * rA * - 0.5 * cos(2w))) + (Vsw * V * rA * (0.5 * sin(2w)))
+LPF drops all the sin(w) and sin(2w) terms, giving py[w] =
+  = (U * rA * 0.5)
+
+Input to QY filter
+  = (Y + U * sin(w) + Vsw * V * cos(w)) * rA * cos(w)
+  = (Y * rA * cos(w)) + (U * rA * sin(w) * cos(w)) + (Vsw * V * rA * cos2(w))
+  = (Y * rA * cos(w)) + (U * rA * sin(w) * cos(w)) + (Vsw * V * rA * cos2(w))
+  = (Y * rA * cos(w)) + (U * rA * 0.5 * sin(2w)) + (Vsw * V * rA * cos2(w))
+  = (Y * rA * cos(w)) + (U * rA * 0.5 * sin(2w)) + (Vsw * V * rA * (0.5 + 0.5 * cos(2w)))
+  = (Y * rA * cos(w)) + (U * rA * 0.5 * sin(2w)) + (Vsw * V * rA * 0.5) + (Vsw * V * rA * 0.5 * cos(2w))
+LPF drops all the cos(w)/sin(2w)/cos(2w) terms, giving qy[w] =
+  = (Vsw * V * rA * 0.5)
+
+Resynth chroma
+  = (py * sine[w] + qy * cosine[w]) / refNorm
+  = (py * sine[w] + qy * cosine[w]) / (rA * rA * 0.5)
+  = (py * rA * sin(w) + qy * rA * cos(w)) / (rA * rA * 0.5)
+  = (U * rA * rA * 0.5 * sin(w) + Vsw * V * rA * rA * 0.5 * cos(w)) / (rA * rA * 0.5)
+  = rA * rA * 0.5 * (U * sin(w) + Vsw * V * cos(w)) / (rA * rA * 0.5)
+  = (U * sin(w) + Vsw * V * cos(w))
+which is correct. (Still with chroma scaled as it originally was.)
+
+line.bp/line.bq is normalised to magnitude 1 so the rotation keeps amplitude the same.
+
+Y = blacklevel + Y' / whitescale
+->
+Y' = (Y - blacklevel) * whitescale
+  so whitescale == scaledContrast
+
+U = U' / whitescale
+->
+U' = U * whitescale
+
+	py = U * rA * 0.5
+	U = py / (rA * 0.5)
+U' = py * whitescale / (rA * 0.5)
+
+All of this would be simpler if we didn't have refAmpl at all!
+
+## Burst detection
+
+Having removed refAmpl...
+
+detectBurst. The colourburst is at fSC, with unknown phase relative to the reference.
+
+Input = k + m * sin(w+o)
+  where
+    k = black level offset
+    m = burst amplitude, 1/2 p-p voltage = (whitelevel - blacklevel) * (3/7) * 0.5
+
+bp = Input * sine[w]
+  = (k + m * sin(w+o)) * sin(w)
+  = (k * sin(w)) + (m * sin(w+o) * sin(w))
+  = (k * sin(w)) + (m * 0.5 * (cos(w+o-w) - cos(w+o+w)))
+  = (k * sin(w)) + (m * 0.5 * (cos(o) - cos(2w+o)))
+  = (k * sin(w)) + (m * 0.5 * cos(o)) - (m * 0.5 * cos(2w+o))
+We're summing over a range of samples, which is going to be an LPF. So sin(w) and cos(2w+...) terms disappear.
+  = (m * 0.5 * cos(o))
+
+bq = Input * cosine[w]
+  = (k + m * sin(w+o)) * cos(w)
+  = (k * cos(w)) + (m * sin(w+o) * cos(w))
+  = (k * cos(w)) + (m * 0.5 * (sin(w+o+w) + sin(w+o-w)))
+  = (k * cos(w)) + (m * 0.5 * (sin(2w+o) + sin(o)))
+  = (k * cos(w)) + (m * 0.5 * sin(2w+o)) + (m * 0.5 * sin(o))
+LPF
+  = (m * 0.5 * sin(o))
+
+Expected bp/bq magnitude
+  = sqrt(bp^2 + bq^2)
+  = sqrt((m * 0.5 * cos(o))^2 + (m * 0.5 * sin(o))^2)
+  = sqrt((m^2 * 0.5^2 * cos2(o)) + (m^2 * 0.5^2 * sin2(o)))
+  = sqrt(m^2 * 0.5^2 * (cos2(o) + sin2(o)))
+  = sqrt(m^2 * 0.5^2)
+  = m * 0.5
+
+In our case - white= 54016 black= 16384
+  m = (54016-16384) * (3/7) * 0.5 = 8064
+  So expected magnitude of bp/bq = 4032
+(Confirmed with "perfect" colourbars from ld-chroma-encoder -- 3925-ish.)
+
+bpo/bqo are the same thing but for the lines immediately above/below -- the
+bpo/bqo vector has the same magnitude as bp/bq, but is rotated 180 degrees
+relative to it on alternate lines, e.g.
+Info: bp,bq= -2273.03 , 3199.32 bpo,bqo= -2273.13 , 3199.48
+Info: bp,bq= -2305.29 , 3176.46 bpo,bqo= 2305.41 , -3176.63
+Info: bp,bq= 2337.32 , -3153.28 bpo,bqo= 2337.44 , -3153.45
+Info: bp,bq= 2369.13 , -3129.8 bpo,bqo= -2369.24 , 3129.94
+This is how the Vsw detection works -- if the two vectors are pointing in the
+same direction, Vsw is 1, else it's -1.
+
+line.(bp/bq) = (bp/bq) + (bpo/bqo rotated by 90 degrees) / 2
+So regardless of which way bpo/bqo points relative to bp/bq, the magnitude
+(burstNorm) = 0.5 * sqrt(2) * magnitude of bp/bq.
+            = 0.5 * sqrt(2) * 0.5 * m
+Nominal burstNorm = 4032 * 0.5 * sqrt(2) = 2851.
+
+Kagemusha bars... looking at waveform, burst is 109/267 = 0.408 tall, should be 0.429 (3/7).
+Info: line= 100 nominal= 4032 burstNorm= 2818.96 white= 54016 black= 16384 ba= 1.43032
+
