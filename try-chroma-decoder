@@ -418,8 +418,8 @@ benchmark () {
 }
 
 ATSDATA="/n/stuff2/capture/laserdisc"
-GGV1069="$ATSDATA/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
-GGV1011="$ATSDATA/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
+GGV1069="$ATSDATA/Simon/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
+GGV1011="$ATSDATA/Simon/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
@@ -469,15 +469,15 @@ run_test () {
 		;;
 	palbars-kagemusha)
 		# 75% EBU bars from leadout of "Kagemusha"
-		decode pal "/n/stuff2/capture/laserdisc/Kagemusha_CLV_PAL_side3leadout_4400_2019-08-26_17-08-41.lds" --ldd--ignoreleadout --ldd-s1500 --ldd-l16
+		decode pal "$ATSDATA/Kagemusha_CLV_PAL_side3leadout_4400_2019-08-26_17-08-41.raw.oga" --ldd--ignoreleadout --ldd-s1500 --ldd-l16
 		;;
 	palbars-bgb)
 		# 75% EBU bars (with rather low level) from leadout of "British Garden Birds"
-		decode pal "/n/stuff2/capture/laserdisc/BritishGardenBirds_CAV_PAL_side1leadout_4400_2019-08-24_22-14-42.lds" --ldd--ignoreleadout --ldd-s20 --ldd-l16
+		decode pal "$ATSDATA/BritishGardenBirds_CAV_PAL_side1leadout_4400_2019-08-24_22-14-42.raw.oga" --ldd--ignoreleadout --ldd-s20 --ldd-l16
 		;;
 	leon)
 		# A few seconds from "Leon", captured noisily with cxadc
-		decode pal "/n/stuff2/capture/laserdisc/cap.leon.r8"
+		decode pal "$ATSDATA/cap.leon.r8"
 		;;
 
 	# ntsc3d decoder
