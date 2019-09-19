@@ -23,6 +23,7 @@ for f in \
 	"$ldddir/ld-ldf-reader" \
 	"$ldddir/scripts/ld-compress.sh" \
 	"$ldddir/tools/ld-analyse/ld-analyse" \
+	"$ldddir/tools/ld-chroma-decoder/encoder/ld-chroma-encoder" \
 	"$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder" \
 	"$ldddir/tools/ld-combine/ld-combine" \
 	"$ldddir/tools/ld-discmap/ld-discmap" \
