@@ -4,6 +4,8 @@
 # FIXME: Detect CX decoding automatically
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 # FIXME: Clean up intermediate files (.doc, .map) once complete
+# FIXME: Extract chapter markers from the VBI
+# FIXME: Extract CC subtitles from the VBI
 
 usage () {
 	cat >&2 <<EOF
