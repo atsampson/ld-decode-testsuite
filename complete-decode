@@ -158,6 +158,13 @@ if $analogue && [ ! -f "$out.analogue.flac" ]; then
 		"${effects[@]}"
 fi
 
+# Look for a manually-added audio track (e.g. a separate audio capture, or an
+# equivalent from a different release).
+extraaudio=false
+if [ -f "$out.extra.flac" ]; then
+	extraaudio=true
+fi
+
 prevtbc="$out".tbc
 
 if $dropouts; then
@@ -203,6 +210,11 @@ if [ ! -f "$out.mkv" ]; then
 		anastream=$streams
 		streams=$(($streams + 1))
 	fi
+	if $extraaudio; then
+		ffargs+=(-i "$out".extra.flac)
+		extrastream=$streams
+		streams=$(($streams + 1))
+	fi
 	for i in $(seq 0 $streams); do
 		ffargs+=(-map $i:0)
 	done
@@ -217,6 +229,9 @@ if [ ! -f "$out.mkv" ]; then
 	fi
 	if $analogue; then
 		ffargs+=(-codec:a:$anastream copy)
+	fi
+	if $extraaudio; then
+		ffargs+=(-codec:a:$extrastream copy)
 	fi
 	ffargs+=(-y "$out".mkv)
 
