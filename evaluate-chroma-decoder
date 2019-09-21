@@ -1,0 +1,145 @@
+#!/usr/bin/python3
+# Evaluate the performance of ld-chroma-decoder by encoding test material.
+
+# XXX There's a lot of duplication between the ffmpeg commands...
+
+import logging
+import os
+import statistics
+import subprocess
+import sys
+
+logging.basicConfig(level=logging.INFO)
+
+testsuite_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
+lddecode_dir = os.path.join(testsuite_dir, "..", "ld-decode")
+
+cache_dir = os.path.join(testsuite_dir, "cache")
+os.makedirs(cache_dir, exist_ok=True)
+
+tmp_dir = "/var/tmp/lddtest"
+os.makedirs(tmp_dir, exist_ok=True)
+
+class TestVideo:
+    """A video testcase."""
+
+    def __init__(self, name):
+        self.name = name
+
+        self.rgbname = os.path.join(cache_dir, name + ".rgb")
+        if not os.path.exists(self.rgbname):
+            logging.info("Generating %s", self.rgbname)
+            self.generate()
+
+        self.tbcname = os.path.join(cache_dir, name + ".tbc")
+        if not os.path.exists(self.tbcname):
+            logging.info("Encoding %s", self.tbcname)
+            self.encode()
+
+    def generate(self):
+        """Generate the .rgb through whatever mechanism.
+        Subclasses should override this."""
+
+        raise NotImplementedError("generate")
+
+    def encode(self):
+        """Encode the .rgb into a .tbc."""
+
+        # XXX assumes PAL
+        subprocess.check_call([
+            os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "encoder", "ld-chroma-encoder"),
+            self.rgbname, self.tbcname,
+            ])
+
+class LAVTestVideo(TestVideo):
+    """A video testcase generated from a libavfilter test source."""
+
+    def __init__(self, name, source):
+        self.source = source
+        super(LAVTestVideo, self).__init__(name)
+
+    def generate(self):
+        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+            "-f", "lavfi", "-i", self.source + "=duration=1:size=922x576:rate=25",
+            "-filter:v", "pad=928",
+            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            ])
+
+class VQEGTestVideo(TestVideo):
+    """A video testcase generated from one of the VQEG test sequences.
+    These can be downloaded from <https://media.xiph.org/vqeg/TestSequences/>."""
+
+    # XXX could download into the cache dir automatically
+    vqeg_dir = "/n/stuff/tv/Test/vqeg"
+
+    def __init__(self, name, yuvname):
+        self.yuvname = os.path.join(self.vqeg_dir, yuvname)
+        super(VQEGTestVideo, self).__init__(name)
+
+    def generate(self):
+        # XXX handle __525.yuv files too
+        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+            "-f", "rawvideo", "-pix_fmt", "uyvy422", "-s", "720x576", "-r", "25",
+            "-i", self.yuvname,
+            "-filter:v", "scale=922:576,pad=928",
+            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            ])
+
+def parse_ffmpeg_stats(filename, want_key):
+    """Read a stats file from ffmpeg's psnr or ssim filter.
+    Return a list of float values with the given key."""
+
+    values = []
+    with open(filename) as f:
+        for line in f.readlines():
+            for field in line.rstrip().split():
+                parts = field.split(":", 1)
+                if len(parts) == 2 and parts[0] == want_key:
+                    values.append(float(parts[1]))
+    return values
+
+def evaluate(testcase, decoder_args):
+    outprefix = os.path.join(tmp_dir, testcase.name + ".out")
+
+    # Run ld-chroma-decoder
+    outrgbname = outprefix + ".rgb"
+    cmd = [os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "ld-chroma-decoder")]
+    cmd += ["--quiet", "--chroma-gain", "1.0"]
+    cmd += decoder_args
+    cmd += [testcase.tbcname, outrgbname]
+    subprocess.check_call(cmd)
+
+    # Compute PSNR and SSIM between the input and output .rgb files.
+    # The values returned may be "inf" if the output is identical to the input...
+    psnrname = outprefix + ".psnr"
+    ssimname = outprefix + ".ssim"
+    subprocess.check_call(["ffmpeg", "-loglevel", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", outrgbname,
+        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", testcase.rgbname,
+        "-lavfi", "[0:v][1:v]psnr=stats_file=%s; [0:v][1:v]ssim=stats_file=%s"
+            % (psnrname, ssimname),
+        "-f", "null", "-",
+        ])
+
+    # Read the per-frame stats back from ffmpeg
+    psnrs = parse_ffmpeg_stats(psnrname, "psnr_avg")
+    psnr = statistics.mean(psnrs)
+    ssims = parse_ffmpeg_stats(ssimname, "All")
+    ssim = statistics.mean(ssims)
+
+    logging.info("testcase %s args %s psnr %f ssim %f",
+                 testcase.name, repr(decoder_args), psnr, ssim)
+
+testcases = [
+#    LAVTestVideo("lavfi-testsrc", "testsrc"),
+#    LAVTestVideo("lavfi-pal75bars", "pal75bars"),
+    VQEGTestVideo("vqeg-mobcal", "src10_ref__625.yuv"),
+    ]
+
+# XXX output as CSV?
+thresh = 0.0
+while thresh < 1.1:
+    decoder_args = ["-f", "transform2d", "--transform-threshold", str(thresh)]
+    for testcase in testcases:
+        evaluate(testcase, decoder_args)
+    thresh += 0.05
