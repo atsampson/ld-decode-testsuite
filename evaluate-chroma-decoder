@@ -66,7 +66,7 @@ class LAVTestVideo(TestVideo):
     def generate(self):
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
             "-f", "lavfi", "-i", self.source,
-            "-filter:v", "pad=928",
+            "-filter:v", "pad=928:576:-1:-1",
             "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
             ])
 
@@ -82,11 +82,38 @@ class VQEGTestVideo(TestVideo):
         super(VQEGTestVideo, self).__init__(name)
 
     def generate(self):
-        # XXX handle __525.yuv files too
+        insize = "720x576"
+        inrate = "25"
+        filters = "scale=922:576,pad=928:576:-1:-1"
+        if self.yuvname.endswith("__525.yuv"):
+            # 525-line sequence -- pad it to 625-line size.
+            # XXX For non-interlaced video, we could scale up to 625-line size instead.
+            insize = "720x486"
+            inrate = "29.97"
+            filters = "scale=648:486,pad=928:576:-1:-1"
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
-            "-f", "rawvideo", "-pix_fmt", "uyvy422", "-s", "720x576", "-r", "25",
+            "-f", "rawvideo", "-pix_fmt", "uyvy422", "-s", insize, "-r", inrate,
             "-i", self.yuvname,
-            "-filter:v", "scale=922:576,pad=928",
+            "-filter:v", filters,
+            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            ])
+
+class LDVTestVideo(TestVideo):
+    """A video testcase generated from one of the LDV test sequences produced by SVT.
+    These can be downloaded from <https://media.xiph.org/ldv/pub/test_sequences/601/>."""
+
+    # XXX could download into the cache dir automatically
+    vqeg_dir = "/n/stuff/tv/Test/ldv"
+
+    def __init__(self, name, yuvname):
+        self.yuvname = os.path.join(self.vqeg_dir, yuvname)
+        super(LDVTestVideo, self).__init__(name)
+
+    def generate(self):
+        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+            "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "720x576", "-r", "25",
+            "-i", self.yuvname,
+            "-filter:v", "scale=922:576,pad=928:576:-1:-1",
             "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
             ])
 
@@ -136,10 +163,36 @@ def evaluate(testcase, decoder_args):
                  testcase.name, repr(decoder_args), psnr, ssim)
 
 testcases = [
-#    LAVTestVideo("lavfi-magenta", "color=c=0xBF00BF"),
-#    LAVTestVideo("lavfi-testsrc", "testsrc"),
-#    LAVTestVideo("lavfi-pal75bars", "pal75bars"),
-    VQEGTestVideo("vqeg-mobcal", "src10_ref__625.yuv"),
+    LAVTestVideo("lavfi-magenta", "color=c=0xBF00BF"),
+    LAVTestVideo("lavfi-testsrc", "testsrc"),
+    LAVTestVideo("lavfi-pal75bars", "pal75bars"),
+
+    # Names for these come from frtv_phase1_final_report.doc
+    VQEGTestVideo("vqeg-tree", "src1_ref__625.yuv"),
+    VQEGTestVideo("vqeg-barcelona", "src2_ref__625.yuv"),
+    VQEGTestVideo("vqeg-harp", "src3_ref__625.yuv"),
+    VQEGTestVideo("vqeg-movinggraphic", "src4_ref__625.yuv"),
+    VQEGTestVideo("vqeg-canoavalsesia", "src5_ref__625.yuv"),
+    VQEGTestVideo("vqeg-f1car", "src6_ref__625.yuv"),
+    VQEGTestVideo("vqeg-fries", "src7_ref__625.yuv"),
+    VQEGTestVideo("vqeg-horizontalscrolling", "src8_ref__625.yuv"),
+    VQEGTestVideo("vqeg-rugby", "src9_ref__625.yuv"),
+    VQEGTestVideo("vqeg-mobilecalendar", "src10_ref__625.yuv"),
+    VQEGTestVideo("vqeg-balloonpops", "src13_ref__525.yuv"),
+    VQEGTestVideo("vqeg-newyork", "src14_ref__525.yuv"),
+#    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
+    VQEGTestVideo("vqeg-betespasbetes", "src16_ref__525.yuv"),
+    VQEGTestVideo("vqeg-lepoint", "src17_ref__525.yuv"),
+    VQEGTestVideo("vqeg-autumnleaves", "src18_ref__525.yuv"),
+    VQEGTestVideo("vqeg-football", "src19_ref__525.yuv"),
+    VQEGTestVideo("vqeg-sailboat", "src20_ref__525.yuv"),
+    VQEGTestVideo("vqeg-susie", "src21_ref__525.yuv"),
+    VQEGTestVideo("vqeg-tempete", "src22_ref__525.yuv"),
+
+    LDVTestVideo("ldv-mobcal", "576i25_mobcal_ter.yuv"),
+    LDVTestVideo("ldv-parkrun", "576i25_parkrun_ter.yuv"),
+    LDVTestVideo("ldv-shields", "576i25_shields_ter.yuv"),
+    LDVTestVideo("ldv-stockholm", "576i25_stockholm_ter.yuv"),
     ]
 
 # XXX output as CSV?
