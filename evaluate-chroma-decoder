@@ -246,8 +246,13 @@ class Individual:
 
     def write_thresholds(self):
         with open(self.thresholds_name, "w") as f:
-            f.write(" ".join("%.02f" % (t * 0.01) for t in self.thresholds))
-            f.write("\n")
+            i = 0
+            for y in range(THRESHOLDS_Y):
+                for x in range(THRESHOLDS_X):
+                    f.write("%.02f " % (self.thresholds[i] * 0.01))
+                    i += 1
+                f.write("\n")
+            assert i == THRESHOLDS_SIZE
 
     def read_scores(self):
         self.scores = {}
