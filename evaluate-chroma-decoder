@@ -14,10 +14,10 @@ logging.basicConfig(level=logging.INFO)
 testsuite_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
 lddecode_dir = os.path.join(testsuite_dir, "..", "ld-decode")
 
-cache_dir = os.path.join(testsuite_dir, "cache")
+cache_dir = os.path.join(testsuite_dir, "cache", "evaluate")
 os.makedirs(cache_dir, exist_ok=True)
 
-tmp_dir = "/var/tmp/lddtest"
+tmp_dir = "/var/tmp/lddtest/evaluate"
 os.makedirs(tmp_dir, exist_ok=True)
 
 class TestVideo:
