@@ -56,11 +56,16 @@ class LAVTestVideo(TestVideo):
 
     def __init__(self, name, source):
         self.source = source
+        if "=" in source:
+            self.source += ":"
+        else:
+            self.source += "="
+        self.source += "duration=1:size=922x576:rate=25"
         super(LAVTestVideo, self).__init__(name)
 
     def generate(self):
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
-            "-f", "lavfi", "-i", self.source + "=duration=1:size=922x576:rate=25",
+            "-f", "lavfi", "-i", self.source,
             "-filter:v", "pad=928",
             "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
             ])
@@ -131,6 +136,7 @@ def evaluate(testcase, decoder_args):
                  testcase.name, repr(decoder_args), psnr, ssim)
 
 testcases = [
+#    LAVTestVideo("lavfi-magenta", "color=c=0xBF00BF"),
 #    LAVTestVideo("lavfi-testsrc", "testsrc"),
 #    LAVTestVideo("lavfi-pal75bars", "pal75bars"),
     VQEGTestVideo("vqeg-mobcal", "src10_ref__625.yuv"),
