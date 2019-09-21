@@ -2,9 +2,12 @@
 # Evaluate the performance of ld-chroma-decoder by encoding test material.
 
 # XXX There's a lot of duplication between the ffmpeg commands...
+# XXX Output stats as a .csv?
 
+import hashlib
 import logging
 import os
+import random
 import statistics
 import subprocess
 import sys
@@ -159,10 +162,10 @@ def evaluate(testcase, decoder_args):
     ssims = parse_ffmpeg_stats(ssimname, "All")
     ssim = statistics.mean(ssims)
 
-    logging.info("testcase %s args %s psnr %f ssim %f",
-                 testcase.name, repr(decoder_args), psnr, ssim)
+    return psnr, ssim
 
-testcases = [
+testcases = {}
+for testcase in [
     LAVTestVideo("lavfi-magenta", "color=c=0xBF00BF"),
     LAVTestVideo("lavfi-testsrc", "testsrc"),
     LAVTestVideo("lavfi-pal75bars", "pal75bars"),
@@ -180,7 +183,7 @@ testcases = [
     VQEGTestVideo("vqeg-mobilecalendar", "src10_ref__625.yuv"),
     VQEGTestVideo("vqeg-balloonpops", "src13_ref__525.yuv"),
     VQEGTestVideo("vqeg-newyork", "src14_ref__525.yuv"),
-#    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
+    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
     VQEGTestVideo("vqeg-betespasbetes", "src16_ref__525.yuv"),
     VQEGTestVideo("vqeg-lepoint", "src17_ref__525.yuv"),
     VQEGTestVideo("vqeg-autumnleaves", "src18_ref__525.yuv"),
@@ -193,12 +196,186 @@ testcases = [
     LDVTestVideo("ldv-parkrun", "576i25_parkrun_ter.yuv"),
     LDVTestVideo("ldv-shields", "576i25_shields_ter.yuv"),
     LDVTestVideo("ldv-stockholm", "576i25_stockholm_ter.yuv"),
-    ]
+    ]:
+    testcases[testcase.name] = testcase
 
-# XXX output as CSV?
-thresh = 0.0
-while thresh < 1.1:
-    decoder_args = ["-f", "transform2d", "--transform-threshold", str(thresh)]
-    for testcase in testcases:
-        evaluate(testcase, decoder_args)
-    thresh += 0.05
+"""
+transform3d: 8 * 32 * ((16 / 8) + 1) = 768
+transform2d: 16 * ((32 / 8) + 1) = 80
+
+We represent threshold values 0.0-1.0 as integers from 0-100.
+"""
+THRESHOLDS_Y = 16
+THRESHOLDS_X = (32 // 8) + 1
+THRESHOLDS_SIZE = THRESHOLDS_Y * THRESHOLDS_X
+QUANTUM = 5
+POPULATION_SIZE = 40
+USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+#USE_TESTCASES = ["vqeg-mobilecalendar"]
+
+# RNGs for creating random individuals, and making evolutionary choices.
+# (The idea being that we cache the results of evaluating individuals, so
+# generating the same random individuals saves some effort.)
+create_random = random.Random(42)
+choose_random = random.Random(73)
+
+# Directory containing a cache of the individuals we've tried so far
+hof_dir = os.path.join(cache_dir, "hof")
+os.makedirs(hof_dir, exist_ok=True)
+
+class Individual:
+    def __init__(self, source, arg=None):
+        if source == "constant":
+            self.thresholds = THRESHOLDS_SIZE * [arg]
+        elif source == "random":
+            self.thresholds = [create_random.randint(0, 100 / QUANTUM) * QUANTUM for i in range(THRESHOLDS_SIZE)]
+        elif source == "copy":
+            self.thresholds = arg
+        else:
+            raise ValueError("bad source: " + source)
+
+        self.hash = hashlib.sha256(" ".join(map(str, self.thresholds)).encode("UTF-8")).hexdigest()
+        self.thresholds_name = os.path.join(hof_dir, self.hash + ".thresholds")
+        self.scores_name = os.path.join(hof_dir, self.hash + ".scores")
+
+        self.scores = None
+        self.total_score = None
+
+    def __repr__(self):
+        return "[%s]" % (",".join(map(str, self.thresholds)))
+
+    def write_thresholds(self):
+        with open(self.thresholds_name, "w") as f:
+            f.write(" ".join("%.02f" % (t * 0.01) for t in self.thresholds))
+            f.write("\n")
+
+    def read_scores(self):
+        self.scores = {}
+        try:
+            with open(self.scores_name) as f:
+                for line in f.readlines():
+                    name, score = line.rstrip().split(",")
+                    self.scores[name] = float(score)
+        except IOError:
+            pass
+
+    def write_scores(self):
+        with open(self.scores_name + ".new", "w") as f:
+            for name, score in sorted(self.scores.items()):
+                f.write("%s,%f\n" % (name, score))
+        os.rename(self.scores_name + ".new", self.scores_name)
+
+population = []
+
+# Construct initial population
+for i in range(0, 101, QUANTUM):
+    population.append(Individual("constant", i))
+# XXX Not sure it's worth having random individuals
+#while len(population) < POPULATION_SIZE:
+#    population.append(Individual("random"))
+
+generation = 0
+while True:
+    logging.info("-" * 70)
+    logging.info("Generation %d, population %d", generation, len(population))
+
+    # Read in state and write out thresholds files
+    for ind in population:
+        ind.write_thresholds()
+        ind.read_scores()
+
+    # Evaluate all the individuals against all the testcases.
+    # Since the testcase data is large (several gigabytes), evaluate all
+    # individuals against each testcase before moving on to the next testcase.
+    for testcase_name in USE_TESTCASES:
+        logging.info("Evaluating with %s", testcase_name)
+        testcase = testcases[testcase_name]
+
+        for ind in population:
+            if testcase_name in ind.scores:
+                logging.info("Already done individual %s - score %f", ind.hash, ind.scores[testcase_name])
+                continue
+
+            decoder_args = ["-f", "transform2d", "--transform-thresholds", ind.thresholds_name]
+            psnr, ssim = evaluate(testcase, decoder_args)
+            logging.info("Testcase %s individual %s PSNR %f SSIM %f", testcase_name, ind.hash, psnr, ssim)
+
+            ind.scores[testcase_name] = ssim
+            ind.write_scores()
+
+    # Compute total score as the product of all scores we're using
+    for ind in population:
+        ind.total_score = 1.0
+        for testcase_name in USE_TESTCASES:
+            ind.total_score *= ind.scores[testcase_name]
+
+    # Sort the best individuals first
+    population.sort(key=lambda ind: -ind.total_score)
+
+    # Show stats
+    for ind in population:
+        logging.info("Individual %s total_score %f", ind.hash, ind.total_score)
+    total_scores = [ind.total_score for ind in population]
+    logging.info("Generation %d: median score %f, best score %f", generation,
+                 statistics.median(total_scores), max(total_scores))
+
+    # Build the new generation.
+    # Elitist selection: keep the top 20% as is.
+    new_population = population[:POPULATION_SIZE // 5]
+
+    # Add another 10% of random individuals
+    # XXX disabled
+    #for i in range(POPULATION_SIZE // 10):
+    #    new_population.append(Individual("random"))
+
+    # Generate the rest with crossover and mutation
+    while len(new_population) < POPULATION_SIZE:
+        if choose_random.random() > 0.5:
+            # Crossover
+
+            # Select two parents, weighted by score
+            parents = choose_random.choices(population, total_scores, k=2)
+
+            # Generate new thresholds by crossover, along a random line on the X or Y axis
+            x_split = 0
+            y_split = 0
+            axis = choose_random.randrange(2)
+            if axis == 0:
+                x_split = choose_random.randint(1, THRESHOLDS_X - 1)
+            elif axis == 1:
+                y_split = choose_random.randint(1, THRESHOLDS_Y - 1)
+
+            thresholds = []
+            for y in range(THRESHOLDS_Y):
+                for x in range(THRESHOLDS_X):
+                    idx = (y * THRESHOLDS_X) + x
+                    n = 0 if (x >= x_split and y >= y_split) else 1
+                    thresholds.append(parents[n].thresholds[idx])
+        else:
+            # Mutation
+
+            parent = choose_random.choices(population, total_scores, k=1)[0]
+            thresholds = parent.thresholds[:]
+
+            pos = choose_random.randrange(THRESHOLDS_SIZE)
+            if choose_random.random() > 0.25:
+                value = choose_random.choice([QUANTUM, -QUANTUM])
+                thresholds[pos] += value
+            else:
+                thresholds[pos] = create_random.randint(0, 100 / QUANTUM) * QUANTUM
+
+            if thresholds[pos] < 0:
+                thresholds[pos] = 0
+            elif thresholds[pos] > 100:
+                thresholds[pos] = 100
+
+        # Insert the new child, if it doesn't duplicate one we already have
+        child = Individual("copy", thresholds)
+        for other in new_population:
+            if other.hash == child.hash:
+                break
+        else:
+            new_population.append(child)
+
+    population = new_population
+    generation += 1
