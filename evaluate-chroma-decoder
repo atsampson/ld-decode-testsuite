@@ -1,8 +1,12 @@
 #!/usr/bin/python3
-# Evaluate the performance of ld-chroma-decoder by encoding test material.
+# Optimise filter configurations for ld-chroma-decoder using a genetic
+# algorithm. Performance is evaluated by encoding test material with
+# ld-chroma-encoder and measuring the similarity of the decoded result using
+# SSIM.
 
 # XXX There's a lot of duplication between the ffmpeg commands...
 # XXX Output stats as a .csv?
+# XXX Try generating an NTSC 3D FFT filter
 
 import hashlib
 import logging
@@ -200,16 +204,18 @@ for testcase in [
     testcases[testcase.name] = testcase
 
 """
+We represent threshold values 0.0-1.0 as integers from 0-100.
+
+Grid sizes:
 transform3d: 8 * 32 * ((16 / 8) + 1) = 768
 transform2d: 16 * ((32 / 8) + 1) = 80
-
-We represent threshold values 0.0-1.0 as integers from 0-100.
 """
 THRESHOLDS_Y = 16
 THRESHOLDS_X = (32 // 8) + 1
 THRESHOLDS_SIZE = THRESHOLDS_Y * THRESHOLDS_X
 QUANTUM = 5
-POPULATION_SIZE = 40
+POPULATION_SIZE = 20
+NUM_CHILDREN = 1
 USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
 #USE_TESTCASES = ["vqeg-mobilecalendar"]
 
@@ -225,6 +231,8 @@ os.makedirs(hof_dir, exist_ok=True)
 
 class Individual:
     def __init__(self, source, arg=None):
+        # thresholds are immutable once an Individual is created.
+
         if source == "constant":
             self.thresholds = THRESHOLDS_SIZE * [arg]
         elif source == "random":
@@ -234,6 +242,7 @@ class Individual:
         else:
             raise ValueError("bad source: " + source)
 
+        # Hash the thresholds to generate a unique filename
         self.hash = hashlib.sha256(" ".join(map(str, self.thresholds)).encode("UTF-8")).hexdigest()
         self.thresholds_name = os.path.join(hof_dir, self.hash + ".thresholds")
         self.scores_name = os.path.join(hof_dir, self.hash + ".scores")
@@ -245,7 +254,7 @@ class Individual:
         return "[%s]" % (",".join(map(str, self.thresholds)))
 
     def write_thresholds(self):
-        with open(self.thresholds_name, "w") as f:
+        with open(self.thresholds_name + ".new", "w") as f:
             i = 0
             for y in range(THRESHOLDS_Y):
                 for x in range(THRESHOLDS_X):
@@ -253,6 +262,7 @@ class Individual:
                     i += 1
                 f.write("\n")
             assert i == THRESHOLDS_SIZE
+        os.rename(self.thresholds_name + ".new", self.thresholds_name)
 
     def read_scores(self):
         self.scores = {}
@@ -270,23 +280,46 @@ class Individual:
                 f.write("%s,%f\n" % (name, score))
         os.rename(self.scores_name + ".new", self.scores_name)
 
-population = []
+# Start with a known-fairly-good configuration.
+population = [Individual("constant", 45)]
 
-# Construct initial population
-for i in range(0, 101, QUANTUM):
-    population.append(Individual("constant", i))
-# XXX Not sure it's worth having random individuals
-#while len(population) < POPULATION_SIZE:
-#    population.append(Individual("random"))
+# Find previously-saved configurations that have the set of testcases we're
+# using, so we implicitly continue from a previous run.
+for filename in os.listdir(hof_dir):
+    if not filename.endswith(".thresholds"):
+        continue
+
+    # Load the thresholds, checking they're the right size
+    with open(os.path.join(hof_dir, filename)) as f:
+        thresholds = [int(float(s) * 100) for s in f.read().rstrip().split()]
+    if len(thresholds) != THRESHOLDS_SIZE:
+        continue
+
+    # Create the individual
+    ind = Individual("copy", thresholds)
+    if ind.hash != filename[:-len(".thresholds")]:
+        # This shouldn't happen, but if it does (probably due to a leftover
+        # file from earlier development), ignore it.
+        continue
+    ind.read_scores()
+
+    # Check we have scores for all the testcases we're using.
+    # XXX Could make a guess if it has some of them, to avoid redoing
+    # everything from scratch when adding a new testcase...
+    for testcase_name in USE_TESTCASES:
+        if testcase_name not in ind.scores:
+            break
+    else:
+        logging.info("Using HoF individual %s", ind.hash)
+        population.append(ind)
 
 generation = 0
 while True:
     logging.info("-" * 70)
     logging.info("Generation %d, population %d", generation, len(population))
 
-    # Read in state and write out thresholds files
+    # Read in existing scores
     for ind in population:
-        ind.write_thresholds()
         ind.read_scores()
 
     # Evaluate all the individuals against all the testcases.
@@ -301,6 +334,7 @@ while True:
                 logging.info("Already done individual %s - score %f", ind.hash, ind.scores[testcase_name])
                 continue
 
+            ind.write_thresholds()
             decoder_args = ["-f", "transform2d", "--transform-thresholds", ind.thresholds_name]
             psnr, ssim = evaluate(testcase, decoder_args)
             logging.info("Testcase %s individual %s PSNR %f SSIM %f", testcase_name, ind.hash, psnr, ssim)
@@ -314,34 +348,77 @@ while True:
         for testcase_name in USE_TESTCASES:
             ind.total_score *= ind.scores[testcase_name]
 
-    # Sort the best individuals first
+    # Sort the best individuals first and trim to max size
     population.sort(key=lambda ind: -ind.total_score)
+    population = population[:POPULATION_SIZE]
 
     # Show stats
+    logging.info("Generation %d leaderboard:", generation)
     for ind in population:
-        logging.info("Individual %s total_score %f", ind.hash, ind.total_score)
+        logging.info("- %s - total_score %f", ind.hash, ind.total_score)
     total_scores = [ind.total_score for ind in population]
     logging.info("Generation %d: median score %f, best score %f", generation,
                  statistics.median(total_scores), max(total_scores))
 
-    # Build the new generation.
-    # Elitist selection: keep the top 20% as is.
-    new_population = population[:POPULATION_SIZE // 5]
+    # Generate new children
+    new_population = population[:]
+    for i in range(NUM_CHILDREN):
 
-    # Add another 10% of random individuals
-    # XXX disabled
-    #for i in range(POPULATION_SIZE // 10):
-    #    new_population.append(Individual("random"))
+        # Choose a parent -- usually the best one
+        # XXX This is more an SA than GA approach...
+        if choose_random.random() < 0.8:
+            parent = population[0]
+        else:
+            parent = choose_random.choice(population)
+        logging.info("child %d mutating from %s", i, parent.hash)
 
-    # Generate the rest with crossover and mutation
-    while len(new_population) < POPULATION_SIZE:
-        if choose_random.random() > 0.5:
-            # Crossover
+        # Mutate
+        # XXX These are all conservative changes -- it may be better to have a "set
+        # to random" mutation to avoid getting stuck in a local maximum. (But that
+        # may not be a problem depending on what the search space looks like...)
+        thresholds = parent.thresholds[:]
+        mutation = choose_random.randrange(10)
+        if mutation in (0, 1, 2):
+            # Raise/lower row
+            delta = choose_random.choice([-QUANTUM, QUANTUM])
+            y = choose_random.randrange(THRESHOLDS_Y)
+            logging.info("raise row %d by %d", y, delta)
+            for x in range(THRESHOLDS_X):
+                idx = (y * THRESHOLDS_X) + x
+                thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
+        elif mutation in (3, 4, 5):
+            # Raise/lower column
+            delta = choose_random.choice([-QUANTUM, QUANTUM])
+            x = choose_random.randrange(THRESHOLDS_X)
+            logging.info("raise column %d by %d", x, delta)
+            for y in range(THRESHOLDS_Y):
+                idx = (y * THRESHOLDS_X) + x
+                thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
+        elif mutation in (6, 7, 8):
+            # Raise/lower radius
+            delta = choose_random.choice([-QUANTUM, QUANTUM])
+            cx = choose_random.randrange(THRESHOLDS_X)
+            cy = choose_random.randrange(THRESHOLDS_Y)
+            r = choose_random.randrange(min(THRESHOLDS_X, THRESHOLDS_Y))
+            logging.info("raise radius %d around %d,%d by %d", r, cx, cy, delta)
+            r2 = r * r
+            for y in range(THRESHOLDS_Y):
+                for x in range(THRESHOLDS_X):
+                    if ((cy - y) * (cy - y)) + ((cx - x) * (cx - x)) < r2:
+                        idx = (y * THRESHOLDS_X) + x
+                        thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
+        else: # mutation == 9
+            # Crossover - weighted lower because it doesn't seem to be very effective!
 
-            # Select two parents, weighted by score
-            parents = choose_random.choices(population, total_scores, k=2)
+            # Select a second parent
+            parent2 = parent
+            if len(population) > 1:
+                while parent.hash == parent2.hash:
+                    parent2 = choose_random.choice(population)
+            if choose_random.random() > 0.5:
+                parent, parent2 = parent2, parent
 
-            # Generate new thresholds by crossover, along a random line on the X or Y axis
+            # Select a random row or column
             x_split = 0
             y_split = 0
             axis = choose_random.randrange(2)
@@ -350,29 +427,16 @@ while True:
             elif axis == 1:
                 y_split = choose_random.randint(1, THRESHOLDS_Y - 1)
 
-            thresholds = []
+            logging.info("crossover between %s and %s at %d,%d", parent.hash, parent2.hash, x_split, y_split)
+
+            # Join the two halves together
             for y in range(THRESHOLDS_Y):
                 for x in range(THRESHOLDS_X):
                     idx = (y * THRESHOLDS_X) + x
-                    n = 0 if (x >= x_split and y >= y_split) else 1
-                    thresholds.append(parents[n].thresholds[idx])
-        else:
-            # Mutation
-
-            parent = choose_random.choices(population, total_scores, k=1)[0]
-            thresholds = parent.thresholds[:]
-
-            pos = choose_random.randrange(THRESHOLDS_SIZE)
-            if choose_random.random() > 0.25:
-                value = choose_random.choice([QUANTUM, -QUANTUM])
-                thresholds[pos] += value
-            else:
-                thresholds[pos] = create_random.randint(0, 100 / QUANTUM) * QUANTUM
-
-            if thresholds[pos] < 0:
-                thresholds[pos] = 0
-            elif thresholds[pos] > 100:
-                thresholds[pos] = 100
+                    if x >= x_split and y >= y_split:
+                        thresholds[idx] = parent.thresholds[idx]
+                    else:
+                        thresholds[idx] = parent2.thresholds[idx]
 
         # Insert the new child, if it doesn't duplicate one we already have
         child = Individual("copy", thresholds)
