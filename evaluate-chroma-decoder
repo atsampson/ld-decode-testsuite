@@ -140,25 +140,39 @@ def parse_ffmpeg_stats(filename, want_key):
 def evaluate(testcase, decoder_args):
     outprefix = os.path.join(tmp_dir, testcase.name + ".out")
 
-    # Run ld-chroma-decoder
+    # Start ld-chroma-decoder with output to a pipe
     outrgbname = outprefix + ".rgb"
-    cmd = [os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "ld-chroma-decoder")]
-    cmd += ["--quiet", "--chroma-gain", "1.0"]
-    cmd += decoder_args
-    cmd += [testcase.tbcname, outrgbname]
-    subprocess.check_call(cmd)
+    decoder_cmd = [
+        os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "ld-chroma-decoder"),
+        "--quiet",
+        "--chroma-gain", "1.0",
+        ] + decoder_args + [
+        testcase.tbcname, # output to stdout
+        ]
+    decoder_proc = subprocess.Popen(decoder_cmd, stdout=subprocess.PIPE)
 
+    # Start ffmpeg reading from the pipe.
     # Compute PSNR and SSIM between the input and output .rgb files.
     # The values returned may be "inf" if the output is identical to the input...
     psnrname = outprefix + ".psnr"
     ssimname = outprefix + ".ssim"
-    subprocess.check_call(["ffmpeg", "-loglevel", "error",
-        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", outrgbname,
+    ffmpeg_command = [
+        "ffmpeg", "-loglevel", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", "-",
         "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", testcase.rgbname,
         "-lavfi", "[0:v][1:v]psnr=stats_file=%s; [0:v][1:v]ssim=stats_file=%s"
             % (psnrname, ssimname),
         "-f", "null", "-",
-        ])
+        ]
+    ffmpeg_proc = subprocess.Popen(ffmpeg_command, stdin=decoder_proc.stdout)
+
+    # Wait for the two processes to finish
+    rc = decoder_proc.wait()
+    if rc != 0:
+        raise subprocess.CalledProcessError(rc, decoder_cmd)
+    rc = ffmpeg_proc.wait()
+    if rc != 0:
+        raise subprocess.CalledProcessError(rc, ffmpeg_cmd)
 
     # Read the per-frame stats back from ffmpeg
     psnrs = parse_ffmpeg_stats(psnrname, "psnr_avg")
