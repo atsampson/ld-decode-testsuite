@@ -201,7 +201,7 @@ for testcase in [
     VQEGTestVideo("vqeg-mobilecalendar", "src10_ref__625.yuv"),
     VQEGTestVideo("vqeg-balloonpops", "src13_ref__525.yuv"),
     VQEGTestVideo("vqeg-newyork", "src14_ref__525.yuv"),
-    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
+#    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
     VQEGTestVideo("vqeg-betespasbetes", "src16_ref__525.yuv"),
     VQEGTestVideo("vqeg-lepoint", "src17_ref__525.yuv"),
     VQEGTestVideo("vqeg-autumnleaves", "src18_ref__525.yuv"),
@@ -228,10 +228,18 @@ THRESHOLDS_Y = 16
 THRESHOLDS_X = (32 // 8) + 1
 THRESHOLDS_SIZE = THRESHOLDS_Y * THRESHOLDS_X
 QUANTUM = 5
-POPULATION_SIZE = 20
+POPULATION_SIZE = 50
+# Normally:
+NUM_PREVIOUS_RANDOM = 0
+# After changing the set of tests:
+#NUM_PREVIOUS_RANDOM = POPULATION_SIZE
 NUM_CHILDREN = 1
-USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+# For experimentation:
 #USE_TESTCASES = ["vqeg-mobilecalendar"]
+# Small set for initial exploration:
+#USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+# Complete set:
+USE_TESTCASES = sorted(testcases.keys())
 
 # RNGs for creating random individuals, and making evolutionary choices.
 # (The idea being that we cache the results of evaluating individuals, so
@@ -294,38 +302,83 @@ class Individual:
                 f.write("%s,%f\n" % (name, score))
         os.rename(self.scores_name + ".new", self.scores_name)
 
-# Start with a known-fairly-good configuration.
-population = [Individual("constant", 45)]
-
-# Find previously-saved configurations that have the set of testcases we're
-# using, so we implicitly continue from a previous run.
-for filename in os.listdir(hof_dir):
+def load_individual(filename):
     if not filename.endswith(".thresholds"):
-        continue
+        return None
 
     # Load the thresholds, checking they're the right size
     with open(os.path.join(hof_dir, filename)) as f:
         thresholds = [int(float(s) * 100) for s in f.read().rstrip().split()]
     if len(thresholds) != THRESHOLDS_SIZE:
-        continue
+        return None
 
     # Create the individual
     ind = Individual("copy", thresholds)
     if ind.hash != filename[:-len(".thresholds")]:
         # This shouldn't happen, but if it does (probably due to a leftover
         # file from earlier development), ignore it.
-        continue
+        return None
     ind.read_scores()
 
+    return ind
+
+# Start with a known-fairly-good configuration.
+population = [Individual("constant", 45)]
+
+# And some that were successfully evolved in the past...
+# transform2d:
+WINNERS = [
+    "26ed6bbcbde9cbd3bdc0a1ec486ed577fabf9bf30ba20c2fb6f73af238fc172a.thresholds",
+    "cbe73a8e39276df08e30f7a2f5b1cba6ad1851047d4cbadd738e2a959aaa5565.thresholds",
+    ]
+for filename in WINNERS:
+    ind = load_individual(filename)
+    if ind is None:
+        continue
+
+    logging.info("Using previous winner HoF individual %s", ind.hash)
+    population.append(ind)
+
+# Find previously-saved configurations that have the set of testcases we're
+# using, so we implicitly continue from a previous run. The cost of including
+# these is minimal because we don't have to run any new tests, so we include
+# all of them in the first generation.
+# We have to sort here so that the shuffle below is deterministic.
+hof_filenames = sorted(os.listdir(hof_dir))
+for filename in hof_filenames:
+    ind = load_individual(filename)
+    if ind is None:
+        continue
+
     # Check we have scores for all the testcases we're using.
-    # XXX Could make a guess if it has some of them, to avoid redoing
-    # everything from scratch when adding a new testcase...
     for testcase_name in USE_TESTCASES:
         if testcase_name not in ind.scores:
             break
     else:
-        logging.info("Using HoF individual %s", ind.hash)
+        logging.info("Using complete HoF individual %s", ind.hash)
         population.append(ind)
+
+# Randomly select at most POPULATION_SIZE previous configurations (that don't
+# have a complete set of tests already), for variety. This means you can
+# continue with a different set of tests.
+choose_random.shuffle(hof_filenames, choose_random.random)
+count = 0
+for filename in hof_filenames:
+    if count >= NUM_PREVIOUS_RANDOM:
+        break
+
+    ind = load_individual(filename)
+    if ind is None:
+        continue
+
+    # Check we haven't picked this one already.
+    for other in population:
+        if other.hash == ind.hash:
+            break
+    else:
+        logging.info("Using random HoF individual %s", ind.hash)
+        population.append(ind)
+        count += 1
 
 generation = 0
 while True:
