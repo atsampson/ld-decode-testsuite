@@ -224,9 +224,22 @@ Grid sizes:
 transform3d: 8 * 32 * ((16 / 8) + 1) = 768
 transform2d: 16 * ((32 / 8) + 1) = 80
 """
+
+# transform2d:
+THRESHOLDS_Z = 1
 THRESHOLDS_Y = 16
 THRESHOLDS_X = (32 // 8) + 1
-THRESHOLDS_SIZE = THRESHOLDS_Y * THRESHOLDS_X
+# transform3d:
+THRESHOLDS_Z = 8
+THRESHOLDS_Y = 32
+THRESHOLDS_X = (16 // 8) + 1
+
+def cell(x, y, z):
+    return (((z * THRESHOLDS_Y) + y) * THRESHOLDS_X) + x
+def clamp_cell(v):
+    return max(0, min(100, v))
+
+THRESHOLDS_SIZE = THRESHOLDS_Z * THRESHOLDS_Y * THRESHOLDS_X
 QUANTUM = 5
 POPULATION_SIZE = 50
 # Normally:
@@ -237,9 +250,9 @@ NUM_CHILDREN = 1
 # For experimentation:
 #USE_TESTCASES = ["vqeg-mobilecalendar"]
 # Small set for initial exploration:
-#USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
 # Complete set:
-USE_TESTCASES = sorted(testcases.keys())
+#USE_TESTCASES = sorted(testcases.keys())
 
 # RNGs for creating random individuals, and making evolutionary choices.
 # (The idea being that we cache the results of evaluating individuals, so
@@ -248,7 +261,7 @@ create_random = random.Random(42)
 choose_random = random.Random(73)
 
 # Directory containing a cache of the individuals we've tried so far
-hof_dir = os.path.join(cache_dir, "hof")
+hof_dir = os.path.join(cache_dir, "hof3d")
 os.makedirs(hof_dir, exist_ok=True)
 
 class Individual:
@@ -277,13 +290,12 @@ class Individual:
 
     def write_thresholds(self):
         with open(self.thresholds_name + ".new", "w") as f:
-            i = 0
-            for y in range(THRESHOLDS_Y):
-                for x in range(THRESHOLDS_X):
-                    f.write("%.02f " % (self.thresholds[i] * 0.01))
-                    i += 1
+            for z in range(THRESHOLDS_Z):
+                for y in range(THRESHOLDS_Y):
+                    for x in range(THRESHOLDS_X):
+                        f.write("%.02f " % (self.thresholds[cell(x, y, z)] * 0.01))
+                    f.write("\n")
                 f.write("\n")
-            assert i == THRESHOLDS_SIZE
         os.rename(self.thresholds_name + ".new", self.thresholds_name)
 
     def read_scores(self):
@@ -327,10 +339,12 @@ population = [Individual("constant", 45)]
 
 # And some that were successfully evolved in the past...
 # transform2d:
-WINNERS = [
+WINNERS2D = [
     "26ed6bbcbde9cbd3bdc0a1ec486ed577fabf9bf30ba20c2fb6f73af238fc172a.thresholds",
     "cbe73a8e39276df08e30f7a2f5b1cba6ad1851047d4cbadd738e2a959aaa5565.thresholds",
     ]
+# transform3d:
+WINNERS = []
 for filename in WINNERS:
     ind = load_individual(filename)
     if ind is None:
@@ -398,11 +412,11 @@ while True:
 
         for ind in population:
             if testcase_name in ind.scores:
-                logging.info("Already done individual %s - score %f", ind.hash, ind.scores[testcase_name])
+                #logging.info("Already done individual %s - score %f", ind.hash, ind.scores[testcase_name])
                 continue
 
             ind.write_thresholds()
-            decoder_args = ["-f", "transform2d", "--transform-thresholds", ind.thresholds_name]
+            decoder_args = ["-f", "transform3d", "--transform-thresholds", ind.thresholds_name]
             psnr, ssim = evaluate(testcase, decoder_args)
             logging.info("Testcase %s individual %s PSNR %f SSIM %f", testcase_name, ind.hash, psnr, ssim)
 
@@ -445,35 +459,50 @@ while True:
         # may not be a problem depending on what the search space looks like...)
         thresholds = parent.thresholds[:]
         mutation = choose_random.randrange(10)
-        if mutation in (0, 1, 2):
-            # Raise/lower row
+        if mutation >= 0 and mutation < 6:
+            # Raise/lower plane
+
             delta = choose_random.choice([-QUANTUM, QUANTUM])
-            y = choose_random.randrange(THRESHOLDS_Y)
-            logging.info("raise row %d by %d", y, delta)
-            for x in range(THRESHOLDS_X):
-                idx = (y * THRESHOLDS_X) + x
-                thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
-        elif mutation in (3, 4, 5):
-            # Raise/lower column
-            delta = choose_random.choice([-QUANTUM, QUANTUM])
-            x = choose_random.randrange(THRESHOLDS_X)
-            logging.info("raise column %d by %d", x, delta)
-            for y in range(THRESHOLDS_Y):
-                idx = (y * THRESHOLDS_X) + x
-                thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
-        elif mutation in (6, 7, 8):
+            want_x, want_y, want_z = -1, -1, -1
+            axis = choose_random.randrange(3)
+            if axis == 0:
+                want_x = choose_random.randrange(THRESHOLDS_X)
+            elif axis == 1:
+                want_y = choose_random.randrange(THRESHOLDS_Y)
+            elif axis == 2:
+                want_z = choose_random.randrange(THRESHOLDS_Z)
+            logging.info("raise plane %d,%d,%d by %d", want_x, want_y, want_z, delta)
+
+            for z in range(THRESHOLDS_Z):
+                if want_z != -1 and want_z != z:
+                    continue
+                for y in range(THRESHOLDS_Y):
+                    if want_y != -1 and want_y != y:
+                        continue
+                    for x in range(THRESHOLDS_X):
+                        if want_x != -1 and want_x != x:
+                            continue
+                        idx = cell(x, y, z)
+                        thresholds[idx] = clamp_cell(thresholds[idx] + delta)
+
+        elif mutation >= 6 and mutation < 9:
             # Raise/lower radius
+
             delta = choose_random.choice([-QUANTUM, QUANTUM])
             cx = choose_random.randrange(THRESHOLDS_X)
             cy = choose_random.randrange(THRESHOLDS_Y)
-            r = choose_random.randrange(min(THRESHOLDS_X, THRESHOLDS_Y))
-            logging.info("raise radius %d around %d,%d by %d", r, cx, cy, delta)
+            cz = choose_random.randrange(THRESHOLDS_Z)
+            r = choose_random.randrange((THRESHOLDS_X + THRESHOLDS_Y + THRESHOLDS_Z) // 3)
+            logging.info("raise radius %d around %d,%d,%d by %d", r, cx, cy, cz, delta)
+
             r2 = r * r
-            for y in range(THRESHOLDS_Y):
-                for x in range(THRESHOLDS_X):
-                    if ((cy - y) * (cy - y)) + ((cx - x) * (cx - x)) < r2:
-                        idx = (y * THRESHOLDS_X) + x
-                        thresholds[idx] = max(0, min(100, thresholds[idx] + delta))
+            for z in range(THRESHOLDS_Z):
+                for y in range(THRESHOLDS_Y):
+                    for x in range(THRESHOLDS_X):
+                        if ((cy - y) * (cy - y)) + ((cx - x) * (cx - x)) + ((cz - z) * (cz - z)) < r2:
+                            idx = cell(x, y, z)
+                            thresholds[idx] = clamp_cell(thresholds[idx] + delta)
+
         else: # mutation == 9
             # Crossover - weighted lower because it doesn't seem to be very effective!
 
@@ -485,25 +514,27 @@ while True:
             if choose_random.random() > 0.5:
                 parent, parent2 = parent2, parent
 
-            # Select a random row or column
-            x_split = 0
-            y_split = 0
-            axis = choose_random.randrange(2)
+            # Select a random plane
+            x_split, y_split, z_split = 0, 0, 0
+            axis = choose_random.randrange(3)
             if axis == 0:
                 x_split = choose_random.randint(1, THRESHOLDS_X - 1)
             elif axis == 1:
                 y_split = choose_random.randint(1, THRESHOLDS_Y - 1)
+            elif axis == 2:
+                z_split = choose_random.randint(1, THRESHOLDS_Z - 1)
 
-            logging.info("crossover between %s and %s at %d,%d", parent.hash, parent2.hash, x_split, y_split)
+            logging.info("crossover between %s and %s at %d,%d,%d", parent.hash, parent2.hash, x_split, y_split, z_split)
 
             # Join the two halves together
-            for y in range(THRESHOLDS_Y):
-                for x in range(THRESHOLDS_X):
-                    idx = (y * THRESHOLDS_X) + x
-                    if x >= x_split and y >= y_split:
-                        thresholds[idx] = parent.thresholds[idx]
-                    else:
-                        thresholds[idx] = parent2.thresholds[idx]
+            for z in range(THRESHOLDS_Z):
+                for y in range(THRESHOLDS_Y):
+                    for x in range(THRESHOLDS_X):
+                        idx = cell(x, y, z)
+                        if x >= x_split and y >= y_split and z >= z_split:
+                            thresholds[idx] = parent.thresholds[idx]
+                        else:
+                            thresholds[idx] = parent2.thresholds[idx]
 
         # Insert the new child, if it doesn't duplicate one we already have
         child = Individual("copy", thresholds)
