@@ -362,8 +362,12 @@ def show_stats():
                 key = "plane" + ("+%d" % delta if delta > 0 else "%d" % delta)
             elif mutation < 9:
                 key = ("radius%d" % radius) + ("+%d" % delta if delta > 0 else "%d" % delta)
-            else:
+            elif mutation == 9:
                 key = "crossover"
+            elif mutation == 10:
+                key = "crossover-radius%d" % radius
+            else:
+                key = "?"
 
             counts = mutations.setdefault(key, [0, 0])
             if firstscore > parentscore:
@@ -518,7 +522,7 @@ while True:
         # to random" mutation to avoid getting stuck in a local maximum. (But that
         # may not be a problem depending on what the search space looks like...)
         thresholds = parent.thresholds[:]
-        mutation = choose_random.choice([0, 6, 6, 6, 9])
+        mutation = choose_random.choice([0, 6, 6, 6, 9, 10])
         delta = 0
         radius = 0
         if mutation == 0:
@@ -566,7 +570,7 @@ while True:
                             thresholds[idx] = clamp_cell(thresholds[idx] + delta)
 
         elif mutation == 9:
-            # Crossover
+            # Plane crossover
 
             # Select a second parent
             parent2 = parent
@@ -596,6 +600,33 @@ while True:
                         if x >= x_split and y >= y_split and z >= z_split:
                             thresholds[idx] = parent.thresholds[idx]
                         else:
+                            thresholds[idx] = parent2.thresholds[idx]
+
+        elif mutation == 10:
+            # Radius crossover
+
+            # Select a second parent
+            parent2 = parent
+            if len(population) > 1:
+                while parent.hash == parent2.hash:
+                    parent2 = choose_random.choice(population)
+
+            # Select a radius
+            cx = choose_random.randrange(THRESHOLDS_X)
+            cy = choose_random.randrange(THRESHOLDS_Y)
+            cz = choose_random.randrange(THRESHOLDS_Z)
+            radius = choose_random.randrange((THRESHOLDS_X + THRESHOLDS_Y + THRESHOLDS_Z) // 3)
+
+            logging.info("crossover-radius between %s and %s around %d,%d,%d radius %d",
+                         parent.hash, parent2.hash, cx, cy, cz, radius)
+
+            # Insert the patch from parent2
+            r2 = radius * radius
+            for z in range(THRESHOLDS_Z):
+                for y in range(THRESHOLDS_Y):
+                    for x in range(THRESHOLDS_X):
+                        idx = cell(x, y, z)
+                        if ((cy - y) * (cy - y)) + ((cx - x) * (cx - x)) + ((cz - z) * (cz - z)) < r2:
                             thresholds[idx] = parent2.thresholds[idx]
 
         else:
