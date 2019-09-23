@@ -482,8 +482,23 @@ while True:
             ind.scores[testcase_name] = ssim
             ind.write_scores()
 
+    # Periodically resurrect a set of random older individuals for variety
+    is_resurrection = (generation % 50) == 0
+    resurrected = []
+    if is_resurrection:
+        hof_filenames = os.listdir(hof_dir)
+        choose_random.shuffle(hof_filenames, choose_random.random)
+        for filename in hof_filenames:
+            ind = load_individual(filename, same_testcases=True)
+            if ind is None:
+                continue
+
+            insert_individual(resurrected, ind)
+            if len(resurrected) >= POPULATION_SIZE:
+                break
+
     # Compute total score as the product of all scores we're using
-    for ind in population:
+    for ind in population + resurrected:
         ind.total_score = 1.0
         for testcase_name in USE_TESTCASES:
             ind.total_score *= ind.scores[testcase_name]
@@ -501,6 +516,13 @@ while True:
     population.sort(key=lambda ind: -ind.total_score)
     population = population[:POPULATION_SIZE]
 
+    # Add in the resurrected individuals
+    if is_resurrection:
+        for ind in resurrected:
+            if insert_individual(population, ind):
+                logging.info("resurrecting %s", ind.hash)
+        population.sort(key=lambda ind: -ind.total_score)
+
     # Show stats
     logging.info("Generation %d leaderboard:", generation)
     for ind in population:
@@ -511,7 +533,8 @@ while True:
 
     # Generate new children
     new_population = population[:]
-    while len(new_population) < len(population) + NUM_CHILDREN:
+    want_children = POPULATION_SIZE if is_resurrection else NUM_CHILDREN
+    while len(new_population) < len(population) + want_children:
 
         # Choose a parent -- usually the best one
         # XXX This is more an SA than GA approach...
@@ -527,6 +550,8 @@ while True:
         # may not be a problem depending on what the search space looks like...)
         thresholds = parent.thresholds[:]
         mutation = choose_random.choice([0, 6, 6, 6, 9, 10])
+        if is_resurrection:
+            mutation = 10
         delta = 0
         radius = 0
         if mutation == 0:
