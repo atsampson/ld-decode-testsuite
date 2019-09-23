@@ -349,18 +349,19 @@ def show_stats():
         firstscore = ind.scores.get("_firstscore")
         parentscore = ind.scores.get("_parentscore")
         mutation = ind.scores.get("_mutation")
-        delta = ind.scores.get("_delta")
+        delta = ind.scores.get("_delta", 0)
+        radius = ind.scores.get("_radius", 0)
 
         if (birth is not None) and (firstscore is not None):
             births_scores.append((birth, firstscore))
 
-        if (mutation is not None) and (delta is not None) and (firstscore is not None) and (parentscore is not None):
+        if (mutation is not None) and (firstscore is not None) and (parentscore is not None):
             mutation = int(mutation)
             delta = int(delta)
             if mutation < 6:
                 key = "plane" + ("+%d" % delta if delta > 0 else "%d" % delta)
             elif mutation < 9:
-                key = "radius" + ("+%d" % delta if delta > 0 else "%d" % delta)
+                key = ("radius%d" % radius) + ("+%d" % delta if delta > 0 else "%d" % delta)
             else:
                 key = "crossover"
 
@@ -502,7 +503,7 @@ while True:
 
     # Generate new children
     new_population = population[:]
-    for i in range(NUM_CHILDREN):
+    while len(new_population) < len(population) + NUM_CHILDREN:
 
         # Choose a parent -- usually the best one
         # XXX This is more an SA than GA approach...
@@ -510,22 +511,21 @@ while True:
             parent = population[0]
         else:
             parent = choose_random.choice(population)
-        logging.info("child %d mutating from %s", i, parent.hash)
-
-        def choose_delta():
-            return QUANTUM * choose_random.choice([-3, -2, -2, -1, -1, -1, 1, 1, 1, 2, 2, 3])
+        logging.info("child mutating from %s", parent.hash)
 
         # Mutate
         # XXX These are all conservative changes -- it may be better to have a "set
         # to random" mutation to avoid getting stuck in a local maximum. (But that
         # may not be a problem depending on what the search space looks like...)
         thresholds = parent.thresholds[:]
-        mutation = choose_random.randrange(10)
-        delta = choose_delta()
-        if mutation >= 0 and mutation < 6:
+        mutation = choose_random.choice([0, 6, 6, 6, 9])
+        delta = 0
+        radius = 0
+        if mutation == 0:
             # Raise/lower plane
 
             want_x, want_y, want_z = -1, -1, -1
+            delta = QUANTUM * choose_random.choice([-1, 1])
             axis = choose_random.randrange(3)
             if axis == 0:
                 want_x = choose_random.randrange(THRESHOLDS_X)
@@ -547,16 +547,17 @@ while True:
                         idx = cell(x, y, z)
                         thresholds[idx] = clamp_cell(thresholds[idx] + delta)
 
-        elif mutation >= 6 and mutation < 9:
+        elif mutation == 6:
             # Raise/lower radius
 
+            delta = QUANTUM * choose_random.choice([-3, -2, -2, -1, -1, -1, 1, 1, 1, 2, 2, 3])
             cx = choose_random.randrange(THRESHOLDS_X)
             cy = choose_random.randrange(THRESHOLDS_Y)
             cz = choose_random.randrange(THRESHOLDS_Z)
-            r = choose_random.randrange((THRESHOLDS_X + THRESHOLDS_Y + THRESHOLDS_Z) // 3)
-            logging.info("raise radius %d around %d,%d,%d by %d", r, cx, cy, cz, delta)
+            radius = choose_random.randrange(min(THRESHOLDS_X, THRESHOLDS_Y, THRESHOLDS_Z))
+            logging.info("raise radius %d around %d,%d,%d by %d", radius, cx, cy, cz, delta)
 
-            r2 = r * r
+            r2 = radius * radius
             for z in range(THRESHOLDS_Z):
                 for y in range(THRESHOLDS_Y):
                     for x in range(THRESHOLDS_X):
@@ -564,8 +565,8 @@ while True:
                             idx = cell(x, y, z)
                             thresholds[idx] = clamp_cell(thresholds[idx] + delta)
 
-        else: # mutation == 9
-            # Crossover - weighted lower because it doesn't seem to be very effective!
+        elif mutation == 9:
+            # Crossover
 
             # Select a second parent
             parent2 = parent
@@ -597,6 +598,9 @@ while True:
                         else:
                             thresholds[idx] = parent2.thresholds[idx]
 
+        else:
+            raise ValueError("unknown mutation %d" % mutation)
+
         # Insert the new child, if it doesn't duplicate one we already have
         child = Individual("copy", thresholds)
         for other in new_population:
@@ -610,8 +614,10 @@ while True:
         if "_birth" not in child.scores:
             child.scores["_birth"] = time.time()
             child.scores["_parentscore"] = parent.total_score
+            child.scores["_bestscore"] = population[0].total_score
             child.scores["_mutation"] = float(mutation)
             child.scores["_delta"] = delta
+            child.scores["_radius"] = radius
             child.write_scores()
 
     population = new_population
