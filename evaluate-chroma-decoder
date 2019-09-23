@@ -315,7 +315,7 @@ class Individual:
                 f.write("%s,%f\n" % (name, score))
         os.rename(self.scores_name + ".new", self.scores_name)
 
-def load_individual(filename):
+def load_individual(filename, same_testcases=False):
     if not filename.endswith(".thresholds"):
         return None
 
@@ -332,6 +332,12 @@ def load_individual(filename):
         # file from earlier development), ignore it.
         return None
     ind.read_scores()
+
+    if same_testcases:
+        # Check we have scores for all the testcases we're using.
+        for testcase_name in USE_TESTCASES:
+            if testcase_name not in ind.scores:
+                return None
 
     return ind
 
@@ -392,6 +398,14 @@ if sys.argv[1:] == ["--stats"]:
 # Start with a known-fairly-good configuration.
 population = [Individual("constant", 45)]
 
+def insert_individual(new_population, ind):
+    """Returns True if inserted, False if it was already there."""
+    for other in new_population:
+        if other.hash == ind.hash:
+            return False
+    new_population.append(ind)
+    return True
+
 # And some that were successfully evolved in the past...
 # transform2d:
 WINNERS2D = [
@@ -406,7 +420,7 @@ for filename in WINNERS:
         continue
 
     logging.info("Using previous winner HoF individual %s", ind.hash)
-    population.append(ind)
+    insert_individual(population, ind)
 
 # Find previously-saved configurations that have the set of testcases we're
 # using, so we implicitly continue from a previous run. The cost of including
@@ -415,17 +429,12 @@ for filename in WINNERS:
 # We have to sort here so that the shuffle below is deterministic.
 hof_filenames = sorted(os.listdir(hof_dir))
 for filename in hof_filenames:
-    ind = load_individual(filename)
+    ind = load_individual(filename, same_testcases=True)
     if ind is None:
         continue
 
-    # Check we have scores for all the testcases we're using.
-    for testcase_name in USE_TESTCASES:
-        if testcase_name not in ind.scores:
-            break
-    else:
-        logging.info("Using complete HoF individual %s", ind.hash)
-        population.append(ind)
+    logging.info("Using complete HoF individual %s", ind.hash)
+    insert_individual(population, ind)
 
 # Randomly select at most POPULATION_SIZE previous configurations (that don't
 # have a complete set of tests already), for variety. This means you can
@@ -440,13 +449,8 @@ for filename in hof_filenames:
     if ind is None:
         continue
 
-    # Check we haven't picked this one already.
-    for other in population:
-        if other.hash == ind.hash:
-            break
-    else:
+    if insert_individual(population, ind):
         logging.info("Using random HoF individual %s", ind.hash)
-        population.append(ind)
         count += 1
 
 generation = 0
@@ -634,11 +638,7 @@ while True:
 
         # Insert the new child, if it doesn't duplicate one we already have
         child = Individual("copy", thresholds)
-        for other in new_population:
-            if other.hash == child.hash:
-                break
-        else:
-            new_population.append(child)
+        insert_individual(new_population, child)
 
         # Record information about the child's creation, for later stats
         child.read_scores()
