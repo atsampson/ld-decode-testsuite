@@ -15,6 +15,7 @@ import random
 import statistics
 import subprocess
 import sys
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -429,6 +430,15 @@ while True:
         for testcase_name in USE_TESTCASES:
             ind.total_score *= ind.scores[testcase_name]
 
+        # Record total score if this is the first time we've done it
+        if "_firstscore" not in ind.scores:
+            # XXX Hack because I introduced this partway through a run
+            if "_birth" not in ind.scores:
+                ind.scores["_birth"] = os.stat(ind.scores_name).st_mtime
+
+            ind.scores["_firstscore"] = ind.total_score
+            ind.write_scores()
+
     # Sort the best individuals first and trim to max size
     population.sort(key=lambda ind: -ind.total_score)
     population = population[:POPULATION_SIZE]
@@ -462,10 +472,10 @@ while True:
         # may not be a problem depending on what the search space looks like...)
         thresholds = parent.thresholds[:]
         mutation = choose_random.randrange(10)
+        delta = choose_delta()
         if mutation >= 0 and mutation < 6:
             # Raise/lower plane
 
-            delta = choose_delta()
             want_x, want_y, want_z = -1, -1, -1
             axis = choose_random.randrange(3)
             if axis == 0:
@@ -491,7 +501,6 @@ while True:
         elif mutation >= 6 and mutation < 9:
             # Raise/lower radius
 
-            delta = choose_delta()
             cx = choose_random.randrange(THRESHOLDS_X)
             cy = choose_random.randrange(THRESHOLDS_Y)
             cz = choose_random.randrange(THRESHOLDS_Z)
@@ -546,6 +555,15 @@ while True:
                 break
         else:
             new_population.append(child)
+
+        # Record information about the child's creation, for later stats
+        child.read_scores()
+        if "_birth" not in child.scores:
+            child.scores["_birth"] = time.time()
+            child.scores["_parentscore"] = parent.total_score
+            child.scores["_mutation"] = float(mutation)
+            child.scores["_delta"] = delta
+            child.write_scores()
 
     population = new_population
     generation += 1
