@@ -335,6 +335,55 @@ def load_individual(filename):
 
     return ind
 
+def show_stats():
+    births_scores = []
+    mutations = {}
+
+    for filename in sorted(os.listdir(hof_dir)):
+        ind = load_individual(filename)
+        if ind is None:
+            continue
+        logging.info("reading %s", filename)
+
+        birth = ind.scores.get("_birth")
+        firstscore = ind.scores.get("_firstscore")
+        parentscore = ind.scores.get("_parentscore")
+        mutation = ind.scores.get("_mutation")
+        delta = ind.scores.get("_delta")
+
+        if (birth is not None) and (firstscore is not None):
+            births_scores.append((birth, firstscore))
+
+        if (mutation is not None) and (delta is not None) and (firstscore is not None) and (parentscore is not None):
+            mutation = int(mutation)
+            delta = int(delta)
+            if mutation < 6:
+                key = "plane" + ("+%d" % delta if delta > 0 else "%d" % delta)
+            elif mutation < 9:
+                key = "radius" + ("+%d" % delta if delta > 0 else "%d" % delta)
+            else:
+                key = "crossover"
+
+            counts = mutations.setdefault(key, [0, 0])
+            if firstscore > parentscore:
+                counts[0] += 1
+            counts[1] += 1
+
+    logging.info("writing births_scores.csv")
+    births_scores.sort()
+    with open("births_scores.csv", "w") as f:
+        for birth, firstscore in births_scores:
+            f.write("%f,%f\n" % (birth, firstscore))
+
+    logging.info("writing mutations.csv")
+    with open("mutations.csv", "w") as f:
+        for mutation, counts in sorted(mutations.items()):
+            f.write("%s,%d,%d\n" % (mutation, counts[0], counts[1]))
+
+if sys.argv[1:] == ["--stats"]:
+    show_stats()
+    sys.exit(0)
+
 # Start with a known-fairly-good configuration.
 population = [Individual("constant", 45)]
 
