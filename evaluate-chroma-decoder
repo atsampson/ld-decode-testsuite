@@ -453,6 +453,9 @@ while True:
             parent = choose_random.choice(population)
         logging.info("child %d mutating from %s", i, parent.hash)
 
+        def choose_delta():
+            return QUANTUM * choose_random.choice([-3, -2, -2, -1, -1, -1, 1, 1, 1, 2, 2, 3])
+
         # Mutate
         # XXX These are all conservative changes -- it may be better to have a "set
         # to random" mutation to avoid getting stuck in a local maximum. (But that
@@ -462,7 +465,7 @@ while True:
         if mutation >= 0 and mutation < 6:
             # Raise/lower plane
 
-            delta = choose_random.choice([-QUANTUM, QUANTUM])
+            delta = choose_delta()
             want_x, want_y, want_z = -1, -1, -1
             axis = choose_random.randrange(3)
             if axis == 0:
@@ -488,7 +491,7 @@ while True:
         elif mutation >= 6 and mutation < 9:
             # Raise/lower radius
 
-            delta = choose_random.choice([-QUANTUM, QUANTUM])
+            delta = choose_delta()
             cx = choose_random.randrange(THRESHOLDS_X)
             cy = choose_random.randrange(THRESHOLDS_Y)
             cz = choose_random.randrange(THRESHOLDS_Z)
