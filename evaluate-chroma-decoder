@@ -5,9 +5,10 @@
 # SSIM.
 
 # XXX There's a lot of duplication between the ffmpeg commands...
-# XXX Output stats as a .csv?
 # XXX Try generating an NTSC 3D FFT filter
 
+import PIL.Image
+import PIL.ImageDraw
 import hashlib
 import logging
 import os
@@ -229,11 +230,13 @@ transform2d: 16 * ((32 / 8) + 1) = 80
 # transform2d:
 THRESHOLDS_Z = 1
 THRESHOLDS_Y = 16
-THRESHOLDS_X = (32 // 8) + 1
+TILE_X = 32
 # transform3d:
 THRESHOLDS_Z = 8
 THRESHOLDS_Y = 32
-THRESHOLDS_X = (16 // 8) + 1
+TILE_X = 16
+
+THRESHOLDS_X = (TILE_X // 8) + 1
 
 def cell(x, y, z):
     return (((z * THRESHOLDS_Y) + y) * THRESHOLDS_X) + x
@@ -309,6 +312,14 @@ class Individual:
         except IOError:
             pass
 
+    def update_total(self):
+        """Compute the total score as the product of all the scores we're currently using.
+        Note this will give different results as the set of testcases changes,
+        and it assumes there are scores for all current testcases."""
+        self.total_score = 1.0
+        for testcase_name in USE_TESTCASES:
+            self.total_score *= self.scores[testcase_name]
+
     def write_scores(self):
         with open(self.scores_name + ".new", "w") as f:
             for name, score in sorted(self.scores.items()):
@@ -342,11 +353,12 @@ def load_individual(filename, same_testcases=False):
     return ind
 
 def show_stats():
-    births_scores = []
+    births = []
     mutations = {}
 
     for filename in sorted(os.listdir(hof_dir)):
-        ind = load_individual(filename)
+        # We only want individuals with the current set of testcases
+        ind = load_individual(filename, same_testcases=True)
         if ind is None:
             continue
         logging.info("reading %s", filename)
@@ -358,8 +370,8 @@ def show_stats():
         delta = ind.scores.get("_delta", 0)
         radius = ind.scores.get("_radius", 0)
 
-        if (birth is not None) and (firstscore is not None):
-            births_scores.append((birth, firstscore))
+        if birth is not None:
+            births.append((birth, ind))
 
         if (mutation is not None) and (firstscore is not None) and (parentscore is not None):
             mutation = int(mutation)
@@ -380,11 +392,55 @@ def show_stats():
                 counts[0] += 1
             counts[1] += 1
 
+    births.sort()
+
+    # Show the series of best results found over time.
+    logging.info("writing result_history.png")
+    best_inds = [births[0][1]]
+    last_time = 0.0
+    best_score = 0.0
+    for birth, ind in births:
+        ind.update_total()
+
+        # It needs to be the best score seen so far...
+        if ind.total_score < best_score:
+            continue
+        best_score = ind.total_score
+
+        # And it needs to be at least 30m after the last one reported.
+        if (birth - last_time) < (30 * 60):
+            continue
+        last_time = birth
+
+        best_inds.append(ind)
+
+    logging.info("%d inds", len(best_inds))
+    COMPLEX_X = TILE_X // 2
+    img_w = (len(best_inds) * (COMPLEX_X + 1)) + 1
+    img_h = ((THRESHOLDS_Y + 1) * THRESHOLDS_Z) + 1
+    img = PIL.Image.new("RGB", (img_w, img_h))
+    draw = PIL.ImageDraw.Draw(img)
+    # Plot to match ld-chroma-decoder's FFT visualisation in layout; the thresholds array
+    # covers XTILE/8 <= x <= XTILE/4 (and reflects around XTILE/4)
+    off_x = TILE_X // 8
+    for i, ind in enumerate(best_inds):
+        tl_x = (COMPLEX_X + 1) * i
+        for z in range(THRESHOLDS_Z):
+            tl_y = (THRESHOLDS_Y + 1) * z
+            draw.rectangle([(tl_x, tl_y), (tl_x + COMPLEX_X + 1, tl_y + THRESHOLDS_Y + 1)], outline=0x004000, width=0)
+            for y in range(THRESHOLDS_Y):
+                for x in range(THRESHOLDS_X):
+                    # Invert the value so black = always chroma, white = always luma
+                    v = 255 - int((ind.thresholds[cell(x, y, z)] / 100.0) * 255)
+                    img.putpixel((tl_x + 1 + x + off_x, tl_y + y + 1), (v << 16) | (v << 8) | v)
+                    # And the reflection since the same threshold is used for both:
+                    img.putpixel((tl_x + 1 + ((TILE_X // 2) - (x + off_x)), tl_y + y + 1), (v << 16) | (v << 8) | v)
+    img.save("result_history.png")
+
     logging.info("writing births_scores.csv")
-    births_scores.sort()
     with open("births_scores.csv", "w") as f:
-        for birth, firstscore in births_scores:
-            f.write("%f,%f\n" % (birth, firstscore))
+        for birth, ind in births:
+            f.write("%f,%f\n" % (birth, ind.total_score))
 
     logging.info("writing mutations.csv")
     with open("mutations.csv", "w") as f:
@@ -497,11 +553,9 @@ while True:
             if len(resurrected) >= POPULATION_SIZE:
                 break
 
-    # Compute total score as the product of all scores we're using
+    # Update total scores
     for ind in population + resurrected:
-        ind.total_score = 1.0
-        for testcase_name in USE_TESTCASES:
-            ind.total_score *= ind.scores[testcase_name]
+        ind.update_total()
 
         # Record total score if this is the first time we've done it
         if "_firstscore" not in ind.scores:
