@@ -202,6 +202,7 @@ for testcase in [
     VQEGTestVideo("vqeg-horizontalscrolling", "src8_ref__625.yuv"),
     VQEGTestVideo("vqeg-rugby", "src9_ref__625.yuv"),
     VQEGTestVideo("vqeg-mobilecalendar", "src10_ref__625.yuv"),
+
     VQEGTestVideo("vqeg-balloonpops", "src13_ref__525.yuv"),
     VQEGTestVideo("vqeg-newyork", "src14_ref__525.yuv"),
 #    VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
@@ -249,15 +250,23 @@ QUANTUM = 5
 POPULATION_SIZE = 50
 # Normally:
 NUM_PREVIOUS_RANDOM = 0
+# XXX This is really the same as is_resurrection (just without requiring existing scores)...
 # After changing the set of tests:
 #NUM_PREVIOUS_RANDOM = POPULATION_SIZE
 NUM_CHILDREN = 1
 # For experimentation:
 #USE_TESTCASES = ["vqeg-mobilecalendar"]
 # Small set for initial exploration:
-USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+#USE_TESTCASES = ["lavfi-pal75bars", "vqeg-mobilecalendar", "vqeg-harp", "ldv-shields", "ldv-stockholm"]
+# Medium 625-line set:
+#USE_TESTCASES = [
+#    "lavfi-magenta", "lavfi-testsrc", "lavfi-pal75bars",
+#    "vqeg-tree", "vqeg-barcelona", "vqeg-harp", "vqeg-movinggraphic", "vqeg-canoavalsesia",
+#    "vqeg-f1car", "vqeg-fries", "vqeg-horizontalscrolling", "vqeg-rugby", "vqeg-mobilecalendar",
+#    "ldv-parkrun", "ldv-shields", "ldv-stockholm",
+#    ]
 # Complete set:
-#USE_TESTCASES = sorted(testcases.keys())
+USE_TESTCASES = sorted(testcases.keys())
 
 # RNGs for creating random individuals, and making evolutionary choices.
 # (The idea being that we cache the results of evaluating individuals, so
@@ -470,7 +479,24 @@ WINNERS2D = [
     "cbe73a8e39276df08e30f7a2f5b1cba6ad1851047d4cbadd738e2a959aaa5565.thresholds",
     ]
 # transform3d:
-WINNERS = []
+WINNERS = [
+    # trained with small set
+    "0d34daf137fba85442f13fd0aec0e0443e95936f65dad6205ae085346a8f282f.thresholds",
+    "e899cc440d4a31b2c050d087f6327fbdf18086e7e3e9623855d827ffa40dac8b.thresholds",
+    "666702d506a3be1ca90945f8a6df29917f27aebbca67b656d852629c6a4592a8.thresholds",
+    "8e2571c0a52ad1b677de895200c1d686a3c5ad5f484729d20dadb6183f090be9.thresholds",
+    "6e26c6260a86e661a833ff973c6224c56001ceed15c02d20fd67cd64c90dfbc7.thresholds",
+    "f9b046c8d30ce9fcdb320d9abd1057114ad56aa9ae56c67bea48ea9df972fd9d.thresholds",
+    # trained with medium set
+    "0c8bff696dd57e425435254a0a986dd87d54299e1c37e23a121a4ebf9936058b.thresholds",
+    "330072406ae98ef88ad716916f01380a736f2fdfe932fe5f3d70e9e7554a8c44.thresholds",
+    "6980dacead6876acb187e5795eaeda88536748e9f9c3b96c1d062e9376144e70.thresholds",
+    "2c38d1c2f93df0df8c50408982b49de2e3c72a51d7ece6ff2f426b1bfd7baacf.thresholds",
+    "5081649f3b1c9ad6192f49799d9b70f187fddd698d42daa274154ca91887fe6e.thresholds",
+    "66a2a936fb27ed2c76a942f70c46fa7865ef57c71e6d1cc4c00e533d56e7c23f.thresholds",
+    "eb10fd53e3edc6e821859d95c8c42731530f03bfc2e3050f66e257b99844178c.thresholds",
+    "05490bfd61cedec6f97f1b451680bfe440521e439cd7301fedbc946e3f25bc53.thresholds",
+]
 for filename in WINNERS:
     ind = load_individual(filename)
     if ind is None:
