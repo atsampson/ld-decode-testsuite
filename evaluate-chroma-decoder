@@ -99,7 +99,8 @@ class VQEGTestVideo(TestVideo):
             # XXX For non-interlaced video, we could scale up to 625-line size instead.
             insize = "720x486"
             inrate = "29.97"
-            filters = "scale=648:486,pad=928:576:-1:-1"
+            # To keep the right aspect ratio: scale=648:486
+            filters = "scale=922:486,pad=928:576:-1:-1"
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
             "-f", "rawvideo", "-pix_fmt", "uyvy422", "-s", insize, "-r", inrate,
             "-i", self.yuvname,
