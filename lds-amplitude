@@ -1,0 +1,69 @@
+#!/usr/bin/python3
+# Scan through a .lds file, reporting on signal amplitude.
+# Produces a CSV report on standard output, including a shell command to
+# truncate the .lds to remove silence at the end.
+
+import numpy as np
+import os
+import shlex
+import sys
+
+sys.path.append("../ld-decode")
+import lddutils
+
+# .lds has 10-bit samples at 40 MHz.
+# 4 samples are packed into 5 bytes.
+SAMPLE_RATE = 40e6
+
+# How often to analyse, and how many samples to look at
+SPACING = int(10.0 * SAMPLE_RATE)
+CHUNK_SIZE = int(0.1 * SAMPLE_RATE)
+
+# RMS threshold for no signal
+RMS_QUIET = 500
+
+def scan(filename):
+    with open(filename, "rb") as f:
+        length_bytes = os.fstat(f.fileno()).st_size
+        length_samples = (length_bytes // 5) * 4
+
+        print("Seconds,Bytes,Peak,RMS")
+
+        offset_samples = 0
+        prev_rms = 0
+        cut_samples = None
+        while offset_samples < length_samples:
+            offset_bytes = (offset_samples // 4) * 5
+
+            # lddutils loaders return 16-bit signed values
+            data = lddutils.load_packed_data_4_40(f, offset_samples, CHUNK_SIZE).astype(np.float)
+
+            # Compute peak and RMS amplitude
+            peak = np.max(np.abs(data))
+            rms = np.sqrt(np.mean(np.square(data)))
+
+            print("%f,%d,%f,%f" % (offset_samples / SAMPLE_RATE, offset_bytes, peak, rms))
+
+            if rms < RMS_QUIET and prev_rms >= RMS_QUIET:
+                cut_samples = offset_samples
+            prev_rms = rms
+
+            offset_samples += SPACING
+
+        # If we didn't find a switch back to silence, it's just the end of the file
+        if cut_samples is None:
+            cut_samples = length_samples
+
+        # Show where to truncate the file to cut silence off the end
+        cut_seconds = int(cut_samples / SAMPLE_RATE)
+        cut_minutes = cut_seconds // 60
+        cut_seconds -= cut_minutes * 60
+        cut_hours = cut_minutes // 60
+        cut_minutes -= cut_hours * 60
+        cut_bytes = (cut_samples // 4) * 5
+        print()
+        print("# Cut point at %d:%02d:%02d" % (cut_hours, cut_minutes, cut_seconds))
+        print("truncate --size %d %s" % (cut_bytes, shlex.quote(filename)))
+
+if __name__ == "__main__":
+    scan(sys.argv[1])
