@@ -130,6 +130,8 @@ decode () {
 	lddargs=
 	tbcsource=ld-decode
 	hacktvlength=0
+	usedoc=
+	docargs=
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -171,6 +173,16 @@ decode () {
 			tbcsource=hacktv
 			hacktvlength="$2"
 			shift 2
+			;;
+		--doc)
+			# Use ld-dropout-correct
+			usedoc=yes
+			shift 1
+			;;
+		--doc-*)
+			# Pass argument to ld-dropout-correct
+			docargs="$docargs ${1#--doc}"
+			shift 1
 			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
@@ -267,6 +279,15 @@ decode () {
 		tbc="$noisytbc"
 	fi
 
+	if [ -n "$usedoc" ]; then
+		doctbc="$tbc.doc"
+		if ! verbose $ldddir/tools/ld-dropout-correct/ld-dropout-correct $docargs "$tbc" "$doctbc"; then
+			touch "$outdir/$testname.FAILED"
+			return
+		fi
+		tbc="$doctbc"
+	fi
+
 	if [ -f "$ldddir/tools/ld-comb-$system/main.cpp" ]; then
 		decoder="$ldddir/tools/ld-comb-$system/ld-comb-$system"
 		if [ -n "$use3d" ]; then
@@ -302,14 +323,14 @@ decode () {
 	if $inputfiles; then
 		$ffmpeg -f rawvideo -pix_fmt gray16 -s $inputsize -r 1 \
 			-ss $(expr $rawframe + $stillframe) -t 1 \
-			-i $tbc "$outdir/$testname-input.png"
+			-i "$tbc" "$outdir/$testname-input.png"
 	fi
 	$ffmpegout -r 1 \
 		-ss $stillframe -t 1 \
-		-i $rgb "$outdir/$testname-output.png"
+		-i "$rgb" "$outdir/$testname-output.png"
 	if $videofiles; then
 		$ffmpegout -r $fps \
-			-i $rgb \
+			-i "$rgb" \
 			-filter:v setfield=tff \
 			-codec:v libx264rgb -crf 16 -flags +ildct+ilme -aspect 4:3 \
 			"$outdir/$testname.mkv"
@@ -438,6 +459,7 @@ all_tests="\
 	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp \
 	pr-motion2 pr-motion4 pr-motion25 pr-motion54 pr-motion77 pr-motion88 pr-motion122 \
 	pr-motion123 pr-motion145 pr-motion155 \
+	doc-kagemusha-off doc-kagemusha-on doc-un-off doc-un-on doc-aspen-off doc-aspen-on \
 	"
 if $videofiles; then
 	all_tests="$all_tests nr-motion pr-motion"
@@ -719,6 +741,37 @@ run_test () {
 	bench-transform3d)
 		benchmark pal "$GGV1011" transform3d
 		;;
+
+	# Dropout correction
+	doc-kagemusha-off)
+		decode pal "$ATSDATA/Kagemusha_CLV_PAL_side1_4400_2019-08-26_16-50-27.raw.oga" --ldd-s3786 --ldd-l16 \
+			--decoder transform3d
+		;;
+	doc-kagemusha-on)
+		decode pal "$ATSDATA/Kagemusha_CLV_PAL_side1_4400_2019-08-26_16-50-27.raw.oga" --ldd-s3786 --ldd-l16 \
+			--doc --doc--overcorrect \
+			--decoder transform3d
+		;;
+	doc-un-off)
+		decode pal "$ATSDATA/Simon/The World the UN and You_CAV_PAL_Disc1_2019-09-15_18-27-44.raw.oga" \
+			--ldd-s1000 --ldd-S470 --ldd-l16 --stillframe 6 \
+			--decoder transform3d
+		;;
+	doc-un-on)
+		decode pal "$ATSDATA/Simon/The World the UN and You_CAV_PAL_Disc1_2019-09-15_18-27-44.raw.oga" \
+			--ldd-s1000 --ldd-S470 --ldd-l16 --stillframe 6 \
+			--doc --doc--overcorrect \
+			--decoder transform3d
+		;;
+	doc-aspen-off)
+		decode ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16
+		;;
+	doc-aspen-on)
+		decode ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16 \
+			--doc --doc--overcorrect
+		;;
+
+	# XXX Signals with varying chroma/burst amplitude
 
 	*)
 		echo >&2 "Unknown test: $testname"
