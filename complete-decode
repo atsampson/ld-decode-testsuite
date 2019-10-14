@@ -20,6 +20,7 @@ Options:
   -3               Disc has AC3 audio (and no right analogue channel)
   -c               Use ld-dropout-correct
   -m               Use ld-discmap
+  -s FRAMES        Skip initial frames (ld-decode.py -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -n               Dry-run mode; show what will be done
 
@@ -39,7 +40,8 @@ decoder=
 discmap=false
 dryrun=false
 standard=ntsc
-while getopts "3Acf:Dmnp" c; do
+lddargs=()
+while getopts "3Acf:Dmnps:" c; do
 	case "$c" in
 	3)
 		ac3=true
@@ -64,6 +66,9 @@ while getopts "3Acf:Dmnp" c; do
 		;;
 	p)
 		standard=pal
+		;;
+	s)
+		lddargs+=(-s "$OPTARG")
 		;;
 	\?)
 		usage
@@ -115,7 +120,7 @@ action () {
 }
 
 if [ ! -f "$out.tbc" ]; then
-	action ld-decode.py "--$standard" "$infile" "$out"
+	action ld-decode.py "--$standard" "${lddargs[@]}" "$infile" "$out"
 fi
 
 if [ ! -f "$out.tbc.json.orig" ]; then
