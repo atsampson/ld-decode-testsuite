@@ -20,6 +20,7 @@ Options:
   -3               Disc has AC3 audio (and no right analogue channel)
   -c               Use ld-dropout-correct
   -m               Use ld-discmap
+  -V               Do everything except final encoding step
   -s FRAMES        Skip initial frames (ld-decode.py -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -n               Dry-run mode; show what will be done
@@ -41,7 +42,8 @@ discmap=false
 dryrun=false
 standard=ntsc
 lddargs=()
-while getopts "3Acf:Dmnps:" c; do
+noencode=false
+while getopts "3Acf:Dmnps:V" c; do
 	case "$c" in
 	3)
 		ac3=true
@@ -69,6 +71,9 @@ while getopts "3Acf:Dmnps:" c; do
 		;;
 	s)
 		lddargs+=(-s "$OPTARG")
+		;;
+	V)
+		noencode=true
 		;;
 	\?)
 		usage
@@ -185,6 +190,10 @@ if $discmap; then
 		action ld-discmap "$prevtbc" "$out".map
 	fi
 	prevtbc="$out".map
+fi
+
+if $noencode; then
+	exit 0
 fi
 
 if [ ! -f "$out.mkv" ]; then
