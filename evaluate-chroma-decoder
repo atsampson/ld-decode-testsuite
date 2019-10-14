@@ -26,6 +26,9 @@ lddecode_dir = os.path.join(testsuite_dir, "..", "ld-decode")
 cache_dir = os.path.join(testsuite_dir, "cache", "evaluate")
 os.makedirs(cache_dir, exist_ok=True)
 
+video_dir = os.path.join(cache_dir, "video")
+os.makedirs(video_dir, exist_ok=True)
+
 tmp_dir = "/var/tmp/lddtest/evaluate"
 os.makedirs(tmp_dir, exist_ok=True)
 
@@ -35,12 +38,12 @@ class TestVideo:
     def __init__(self, name):
         self.name = name
 
-        self.rgbname = os.path.join(cache_dir, name + ".rgb")
+        self.rgbname = os.path.join(video_dir, name + ".rgb")
         if not os.path.exists(self.rgbname):
             logging.info("Generating %s", self.rgbname)
             self.generate()
 
-        self.tbcname = os.path.join(cache_dir, name + ".tbc")
+        self.tbcname = os.path.join(video_dir, name + ".tbc")
         if not os.path.exists(self.tbcname):
             logging.info("Encoding %s", self.tbcname)
             self.encode()
