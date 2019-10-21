@@ -1,6 +1,18 @@
 #!/usr/bin/python3
-# Evolve EFM filters by running test decodes and looking at the statistics
-# ld-process-efm produces.
+"""
+Evolve EFM filters by running test decodes and looking at the statistics
+ld-process-efm produces.
+
+This uses a differential evolution approach, based on:
+
+R. Storn, "On the usage of differential evolution for function optimization",
+Proceedings of North American Fuzzy Information Processing, Berkeley, CA, USA,
+1996, pp. 519-523.
+<https://ieeexplore.ieee.org/document/534789>
+
+Kelly Fleetwood, "An Introduction to Differential Evolution"
+<https://www.maths.uq.edu.au/MASCOS/Multi-Agent04/Fleetwood.pdf>
+"""
 
 import concurrent.futures
 import numpy
@@ -8,25 +20,49 @@ import os
 import random
 import re
 import scipy.signal
+import scipy.stats
 import subprocess
+import sys
 import tempfile
 import time
 
+# Sizes of the filter coefficients
+NUM_B = 7
+NUM_A = 7
+
 class Candidate:
-    """A filter design to be evaluated. b/a are the IIR coefficients in scipy's
-    form."""
+    """A filter design to be evaluated."""
 
-    def __init__(self, b, a):
-        self.b = b
-        self.a = a
-
+    def __init__(self, coeffs):
+        self.coeffs = coeffs
         self.birth = time.time()
-        self.future = None
+        self.futures = {}
         self.results = {}
         self.score = None
+        self.target = None
 
     def __str__(self):
-        return "Candidate([%s], [%s])" % (", ".join([str(x) for x in self.b]), ", ".join([str(x) for x in self.a]))
+        # We show this in un-normalised form
+        b, a = self.coeffs[:NUM_B], self.coeffs[NUM_B:]
+        return "Candidate([%s], [%s])" % (", ".join([str(x) for x in b]),
+                                          ", ".join([str(x) for x in a]))
+
+    def ba(self):
+        """Return normalised filter coefficients b, a."""
+
+        b, a = scipy.signal.normalize(self.coeffs[:NUM_B], self.coeffs[NUM_B:])
+        return b, a
+
+    def valid(self):
+        """Return True if this is a valid filter design, False if not."""
+
+        # An IIR filter is only stable if all the poles are within the unit circle
+        b, a = self.ba()
+        z, p, k = scipy.signal.tf2zpk(b, a)
+        if numpy.any(numpy.abs(p) >= 1.0):
+            return False
+
+        return True
 
 class Testcase:
     """An RF sample that can be decoded."""
@@ -51,10 +87,9 @@ def evaluate(candidate, testcase):
 
     Returns a dictionary of statistics."""
 
-    #print("Evaluate", str(candidate), "against", str(testcase))
-
     # Apply the filter
-    filtered = scipy.signal.lfilter(candidate.b, candidate.a, testcase.data).astype(numpy.int16)
+    b, a = candidate.ba()
+    filtered = scipy.signal.lfilter(b, a, testcase.data).astype(numpy.int16)
 
     with tempfile.TemporaryDirectory(dir="/var/tmp") as tempdir:
         # Run the PLL
@@ -114,6 +149,12 @@ def evaluate(candidate, testcase):
 
     return counts
 
+# Differential evolution parameters, as recommended by Storn:
+de_NP = 10 * (NUM_B + NUM_A)
+de_F = 0.2
+de_CR = 0.1
+
+# Sample rate
 rate = 40e6
 
 # XXX Better to load only one at a time into memory?
@@ -121,86 +162,119 @@ testcases = [
     Testcase("/d/extra/laserdisc/fawlty.s16", 1 * rate),
     ]
 
-# Generate initial population with some halfway-reasonable filters
-candidates = []
-for x in range(200, 1000, 100):
-    f = 1.0e6 + (0.001e6 * x)
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
 
-    #b, a = scipy.signal.ellip(6, 0.3, 50.0, 1.708e6, fs=rate)
-    b, a = scipy.signal.ellip(6, 0.3, 50.0, f, fs=rate)
-    candidates.append(Candidate(b, a))
+def submit_eval(cand):
+    """Start evaluating cand against all the testcases."""
 
-population = []
-generation = 0
-while True:
-    generation += 1
+    for testcase in testcases:
+        cand.futures[testcase.name()] = executor.submit(evaluate, cand, testcase)
 
-    # Evaluate the candidates in parallel
-    print("Evaluating...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        for testcase in testcases:
-            for cand in candidates:
-                cand.future = executor.submit(evaluate, cand, testcase)
-            for cand in candidates:
-                cand.results[testcase.name()] = cand.future.result()
+def finish_eval(cands):
+    """Wait for evaluation to finish for a list of candidates, and compute
+    their fitnesses."""
 
-    # Compute scores (i.e. the fitness function)
-    print()
-    for cand in candidates:
+    print("Evaluating", end="", flush=True)
+
+    winners = 0
+    for cand in cands:
+        # Collect any outstanding results
+        for name, future in cand.futures.items():
+            cand.results[name] = future.result()
+        cand.futures = {}
+
+        # Compute fitness
         cand.score = 0
         for testcase in testcases:
             result = cand.results[testcase.name()]
             # XXX The weighting isn't very fair here (more symbols than anything else)
             cand.score += sum(result.values())
-            print("New score:", str(cand), "=", cand.score)
 
-    # Don't bother keeping candidates with 0 score
-    population += [cand for cand in candidates if cand.score > 0]
+        # Compare with target, if it has one
+        dot = "."
+        if cand.target is not None:
+            if cand.score > population[cand.target].score:
+                # Replace it!
+                population[cand.target] = cand
+                dot = "!"
+                winners += 1
+            cand.target = None
+
+        print(dot, end="", flush=True)
+
+    print(" ", winners, "successful trials")
+
+# Generate initial population randomly.
+# Most random IIR filters aren't going to be stable, so this will take many
+# tries... but we can evaluate them at the same time.
+print("Generating initial population...")
+population = []
+while len(population) < de_NP:
+    cand = Candidate(numpy.array([random.uniform(-1.0, 1.0) for i in range(NUM_B + NUM_A)]))
+    if cand.valid():
+        submit_eval(cand)
+        population.append(cand)
+
+finish_eval(population)
+
+generation = 0
+while True:
+    generation += 1
+
+    # Sort best first
     population.sort(key=lambda cand: -cand.score)
 
+    # Show the leaderboard
     print()
-    print("Generation", generation, "leaderboard (total", len(population), ":")
+    print("Generation", generation, "leaderboard")
+    print("%20s %20s %s" % ("Score", "Time", "Candidate"))
     for cand in population[:10]:
-        print(cand.score, cand.birth, str(cand), cand.results)
+        print("%20d %20d" % (cand.score, cand.birth), str(cand), cand.results)
+    scores = [cand.score for cand in population]
+    print("Scores:", " ".join([str(score) for score in scores]))
+    print("Score stats:", scipy.stats.describe(scores))
     print()
 
+    # Save the leaderboard to a file
     with open("leaderboard.new", "w") as f:
         for cand in population:
             f.write("%f,%f,%s\n" % (cand.score, cand.birth, str(cand)))
     os.rename("leaderboard.new", "leaderboard")
 
-    # Generate new candidates
-    print("Generating...")
-    candidates = []
-    while len(candidates) < 10:
-        # Pick an existing candidate
-        if random.random() < 0.5:
-            parent = random.choice(population[:50])
-        else:
-            parent = random.choice(population)
+    # Generate a trial candidate for each candidate in population, kicking off evaluations as we go
+    print("Mutating...")
+    trials = []
+    popsize = len(population)
+    for idx_target, cand_target in enumerate(population):
+        while True:
+            # Choose three other individuals, all distinct from cand_p
+            while True:
+                idx_1 = random.randrange(popsize)
+                idx_2 = random.randrange(popsize)
+                idx_3 = random.randrange(popsize)
+                if len(set([idx_target, idx_1, idx_2, idx_3])) == 4:
+                    break
+            cand_1 = population[idx_1]
+            cand_2 = population[idx_2]
+            cand_3 = population[idx_3]
 
-        # Pick b or a to mutate
-        child = Candidate(parent.b, parent.a)
-        if random.random() < 0.5:
-            to_mut = child.a
-        else:
-            to_mut = child.b
+            # Compute donor from their coefficients
+            donor = cand_1.coeffs + (de_F * (cand_2.coeffs - cand_3.coeffs))
 
-        # Do a mix of large and small changes - not sure this makes much sense!
-        mut_pos = random.randint(0, len(to_mut) - 1)
-        mut_places = random.randint(-1, 20)
-        mut_factor = (random.random() * 2) - 1
-        new_val = to_mut[mut_pos] + (to_mut[mut_pos] * mut_factor * 10**-mut_places)
-        #print("Mutate", mut_pos, mut_places, mut_factor, "from", to_mut[mut_pos], "to", new_val)
-        to_mut[mut_pos] = new_val
+            # Build new candidate from target and donor
+            irand = random.randrange(len(donor))
+            trial = Candidate(cand_target.coeffs)
+            for i in range(len(donor)):
+                if random.uniform(0.0, 1.0) < de_CR or i == irand:
+                    trial.coeffs[i] = donor[i]
 
-        child.b, child.a = scipy.signal.normalize(child.b, child.a)
+            # Can we keep it?
+            if trial.valid():
+                break
 
-        # Is the resulting filter stable?
-        # An IIR filter is stable if all the poles are within the unit circle.
-        z, p, k = scipy.signal.tf2zpk(child.b, child.a)
-        if numpy.any(numpy.abs(p) >= 1.0):
-            #print("Not stable")
-            continue
+        trial.target = idx_target
+        submit_eval(trial)
+        trials.append(trial)
 
-        candidates.append(child)
+    # Finish evaluations, inserting successful trials into population
+    finish_eval(trials)
