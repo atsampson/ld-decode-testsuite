@@ -1,0 +1,206 @@
+#!/usr/bin/python3
+# Evolve EFM filters by running test decodes and looking at the statistics
+# ld-process-efm produces.
+
+import concurrent.futures
+import numpy
+import os
+import random
+import re
+import scipy.signal
+import subprocess
+import tempfile
+import time
+
+class Candidate:
+    """A filter design to be evaluated. b/a are the IIR coefficients in scipy's
+    form."""
+
+    def __init__(self, b, a):
+        self.b = b
+        self.a = a
+
+        self.birth = time.time()
+        self.future = None
+        self.results = {}
+        self.score = None
+
+    def __str__(self):
+        return "Candidate([%s], [%s])" % (", ".join([str(x) for x in self.b]), ", ".join([str(x) for x in self.a]))
+
+class Testcase:
+    """An RF sample that can be decoded."""
+
+    def __init__(self, filename, length):
+        self.filename = filename
+        self.length = length
+
+        with open(filename, "rb") as f:
+            self.data = numpy.fromfile(f, numpy.int16, int(length))
+
+    def __str__(self):
+        return self.name()
+
+    def name(self):
+        return "Testcase(%s, %d)" % (self.filename, int(self.length))
+
+def evaluate(candidate, testcase):
+    """Evaluate candidate against testcase: filter testcase's data using the
+    candidate filter, then feed it through ld-ldstoefm and ld-process-efm, and
+    parse ld-process-efm's log output for statistics.
+
+    Returns a dictionary of statistics."""
+
+    #print("Evaluate", str(candidate), "against", str(testcase))
+
+    # Apply the filter
+    filtered = scipy.signal.lfilter(candidate.b, candidate.a, testcase.data).astype(numpy.int16)
+
+    with tempfile.TemporaryDirectory(dir="/var/tmp") as tempdir:
+        # Run the PLL
+        efm_filename = os.path.join(tempdir, "eval.efm")
+        p = subprocess.Popen(["ld-ldstoefm", efm_filename], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        p.stdin.write(filtered.tobytes())
+        p.stdin.close()
+        rc = p.wait()
+        assert rc == 0
+
+        # XXX do this if rc != 0
+        # XXX ld-process-efm pops up a dialog if the input file is empty! Write a dummy file...
+        if os.stat(efm_filename).st_size == 0:
+            with open(efm_filename, "wb") as f:
+                f.write(bytes([3]))
+
+        # Run ld-process-efm and collect statistics
+        p = subprocess.Popen(["ld-process-efm", "-n", efm_filename, "/dev/null"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        section = None
+        counts = {}
+        for line in p.stderr.readlines():
+            line = line.decode("UTF-8").rstrip()
+            if not line.startswith("Info: "):
+                continue
+            line = line[6:].lstrip()
+
+            if line.endswith(":"):
+                section = line[:-1]
+                continue
+
+            m = re.match(r'(.*): (\d+)', line)
+            if m is not None:
+                name = m.group(1)
+                count = int(m.group(2))
+
+                if section == "EFM to F3 Frames":
+                    if name == "Valid syncs":
+                        counts["syncs"] = count
+                    elif name == "Valid EFM symbols":
+                        counts["symbols"] = count
+                    elif name == "Valid frames":
+                        counts["frames"] = count
+                elif section == "F3 Frame to F2 Frame decode":
+                    if name == "Total input F3 Frames":
+                        counts["f3"] = count
+                    elif name == "Total output F2 Frames":
+                        counts["f2"] = count
+                elif section == "F2 Frames to F1 Frames":
+                    if name == "Valid frames":
+                        counts["f1"] = count
+        p.stderr.close()
+        rc = p.wait()
+        assert rc == 0
+
+    # Make sure we saw all the stats we expect
+    assert len(counts) == 6
+
+    return counts
+
+rate = 40e6
+
+# XXX Better to load only one at a time into memory?
+testcases = [
+    Testcase("/d/extra/laserdisc/fawlty.s16", 1 * rate),
+    ]
+
+# Generate initial population with some halfway-reasonable filters
+candidates = []
+for x in range(200, 1000, 100):
+    f = 1.0e6 + (0.001e6 * x)
+
+    #b, a = scipy.signal.ellip(6, 0.3, 50.0, 1.708e6, fs=rate)
+    b, a = scipy.signal.ellip(6, 0.3, 50.0, f, fs=rate)
+    candidates.append(Candidate(b, a))
+
+population = []
+generation = 0
+while True:
+    generation += 1
+
+    # Evaluate the candidates in parallel
+    print("Evaluating...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        for testcase in testcases:
+            for cand in candidates:
+                cand.future = executor.submit(evaluate, cand, testcase)
+            for cand in candidates:
+                cand.results[testcase.name()] = cand.future.result()
+
+    # Compute scores (i.e. the fitness function)
+    print()
+    for cand in candidates:
+        cand.score = 0
+        for testcase in testcases:
+            result = cand.results[testcase.name()]
+            # XXX The weighting isn't very fair here (more symbols than anything else)
+            cand.score += sum(result.values())
+            print("New score:", str(cand), "=", cand.score)
+
+    # Don't bother keeping candidates with 0 score
+    population += [cand for cand in candidates if cand.score > 0]
+    population.sort(key=lambda cand: -cand.score)
+
+    print()
+    print("Generation", generation, "leaderboard (total", len(population), ":")
+    for cand in population[:10]:
+        print(cand.score, cand.birth, str(cand), cand.results)
+    print()
+
+    with open("leaderboard.new", "w") as f:
+        for cand in population:
+            f.write("%f,%f,%s\n" % (cand.score, cand.birth, str(cand)))
+    os.rename("leaderboard.new", "leaderboard")
+
+    # Generate new candidates
+    print("Generating...")
+    candidates = []
+    while len(candidates) < 10:
+        # Pick an existing candidate
+        if random.random() < 0.5:
+            parent = random.choice(population[:50])
+        else:
+            parent = random.choice(population)
+
+        # Pick b or a to mutate
+        child = Candidate(parent.b, parent.a)
+        if random.random() < 0.5:
+            to_mut = child.a
+        else:
+            to_mut = child.b
+
+        # Do a mix of large and small changes - not sure this makes much sense!
+        mut_pos = random.randint(0, len(to_mut) - 1)
+        mut_places = random.randint(-1, 20)
+        mut_factor = (random.random() * 2) - 1
+        new_val = to_mut[mut_pos] + (to_mut[mut_pos] * mut_factor * 10**-mut_places)
+        #print("Mutate", mut_pos, mut_places, mut_factor, "from", to_mut[mut_pos], "to", new_val)
+        to_mut[mut_pos] = new_val
+
+        child.b, child.a = scipy.signal.normalize(child.b, child.a)
+
+        # Is the resulting filter stable?
+        # An IIR filter is stable if all the poles are within the unit circle.
+        z, p, k = scipy.signal.tf2zpk(child.b, child.a)
+        if numpy.any(numpy.abs(p) >= 1.0):
+            #print("Not stable")
+            continue
+
+        candidates.append(child)
