@@ -1,0 +1,58 @@
+#!/usr/bin/python3
+# Show frequency resonse and group delay for candidate EFM filters at the
+# points described in the PAL LaserDisc spec.
+
+import numpy
+import scipy.signal
+
+rate = 40e6
+
+def show(b, a):
+    print("b=", list(b))
+    print("a=", list(a))
+
+    # Show frequency response
+    print("Frequency response:")
+    w, h = scipy.signal.freqz(b, a, fs=rate)
+    fs = [0, 0.5e6, 1.0e6, 1.6e6, 1.75e6, 2.0e6, 2.3e6, 2.5e6]
+    i = 0
+    while fs != []:
+        f = fs.pop(0)
+        while w[i] < f:
+            i += 1
+        ampl = numpy.abs(h[i])
+        db = 20 * numpy.log10(ampl)
+        print("   %10f %10f" % (w[i], db))
+
+    # Show group delay
+    print("Group delay:")
+    w = [0, 0.5e6, 0.8e6, 1e6, 1.2e6, 1.4e6]
+    w, gd = scipy.signal.group_delay((b, a), w=w, fs=rate)
+    for freq, samples in zip(w, gd):
+        print("   %10f %10f" % (freq, samples))
+
+    print()
+
+# EFM low-pass filter
+for n in range(5, 8):
+    print("EFM LPF order", n)
+
+    #b, a = scipy.signal.butter(n, 1.75e6, fs=rate)
+    b, a = scipy.signal.ellip(n, 0.3, 50.0, 1.708e6, fs=rate)
+    #b, a = scipy.signal.iirfilter(n, 1.75e6, rp=1.0, rs=50.0, btype='lowpass', ftype='bessel', fs=rate)
+    show(b, a)
+
+"""
+order 5 ellip?
+ld-decode uses order 4 ellip! (And group delay isn't very close.)
+
+Good ones:
+    b, a = scipy.signal.ellip(6, 0.5, 50.0, 1.72e6, fs=rate)
+    b, a = scipy.signal.ellip(6, 0.25, 50.0, 1.7e6, fs=rate)
+    b, a = scipy.signal.ellip(6, 0.3, 50.0, 1.708e6, fs=rate)
+
+cf https://www.sciencedirect.com/topics/engineering/elliptic-filters
+Same topology as the circuit in the PAL spec...
+
+Deemph filter?
+"""
