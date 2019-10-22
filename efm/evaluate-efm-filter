@@ -208,11 +208,30 @@ def finish_eval(cands):
 
     print(" ", winners, "successful trials")
 
+population = []
+
+# Reload from leaderboard, if it exists
+try:
+    with open("leaderboard", "r") as f:
+        print("Loading existing leaderboard...")
+        for line in f.readlines():
+            fields = line.rstrip().split(",", 2)
+            m = re.match(r'Candidate\(\[(.*)\], \[(.*)\]\)', fields[2])
+            coeffs = numpy.array([float(s) for s in m.group(1).split(",") + m.group(2).split(",")])
+            cand = Candidate(coeffs, int(fields[1]))
+            if cand.valid():
+                submit_eval(cand)
+                population.append(cand)
+
+    generation = max(cand.generation for cand in population) + 1
+except FileNotFoundError:
+    # Starting from scratch
+    generation = 0
+
 # Generate initial population randomly.
 # Most random IIR filters aren't going to be stable, so this will take many
 # tries... but we can evaluate them at the same time.
 print("Generating initial population...")
-population = []
 while len(population) < de_NP:
     cand = Candidate(numpy.array([random.uniform(-2.0, 2.0) for i in range(NUM_B + NUM_A)]), 0)
     if cand.valid():
@@ -221,7 +240,6 @@ while len(population) < de_NP:
 
 finish_eval(population)
 
-generation = 0
 while True:
     generation += 1
 
