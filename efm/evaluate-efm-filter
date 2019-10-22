@@ -269,10 +269,11 @@ while True:
 
             # Build new candidate from target and donor
             irand = random.randrange(len(donor))
-            trial = Candidate(cand_target.coeffs, generation)
+            coeffs = cand_target.coeffs.copy()
             for i in range(len(donor)):
                 if random.uniform(0.0, 1.0) < de_CR or i == irand:
-                    trial.coeffs[i] = donor[i]
+                    coeffs[i] = donor[i]
+            trial = Candidate(coeffs, generation)
 
             # Can we keep it?
             if trial.valid():
