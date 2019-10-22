@@ -56,6 +56,10 @@ class Candidate:
     def valid(self):
         """Return True if this is a valid filter design, False if not."""
 
+        # All coeffs should be in range [-2, 2]
+        if numpy.any(numpy.abs(self.coeffs) >= 2):
+            return False
+
         # An IIR filter is only stable if all the poles are within the unit circle
         b, a = self.ba()
         z, p, k = scipy.signal.tf2zpk(b, a)
@@ -210,7 +214,7 @@ def finish_eval(cands):
 print("Generating initial population...")
 population = []
 while len(population) < de_NP:
-    cand = Candidate(numpy.array([random.uniform(-1.0, 1.0) for i in range(NUM_B + NUM_A)]))
+    cand = Candidate(numpy.array([random.uniform(-2.0, 2.0) for i in range(NUM_B + NUM_A)]), 0)
     if cand.valid():
         submit_eval(cand)
         population.append(cand)
