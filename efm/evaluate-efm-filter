@@ -33,9 +33,9 @@ NUM_A = 7
 class Candidate:
     """A filter design to be evaluated."""
 
-    def __init__(self, coeffs):
+    def __init__(self, coeffs, generation):
         self.coeffs = coeffs
-        self.birth = time.time()
+        self.generation = generation
         self.futures = {}
         self.results = {}
         self.score = None
@@ -227,9 +227,9 @@ while True:
     # Show the leaderboard
     print()
     print("Generation", generation, "leaderboard")
-    print("%20s %20s %s" % ("Score", "Time", "Candidate"))
+    print("%20s %20s %s" % ("Score", "Generation", "Candidate"))
     for cand in population[:10]:
-        print("%20d %20d" % (cand.score, cand.birth), str(cand), cand.results)
+        print("%20d %20d" % (cand.score, cand.generation), str(cand), cand.results)
     scores = [cand.score for cand in population]
     print("Scores:", " ".join([str(score) for score in scores]))
     print("Score stats:", scipy.stats.describe(scores))
@@ -238,7 +238,7 @@ while True:
     # Save the leaderboard to a file
     with open("leaderboard.new", "w") as f:
         for cand in population:
-            f.write("%f,%f,%s\n" % (cand.score, cand.birth, str(cand)))
+            f.write("%f,%d,%s\n" % (cand.score, cand.generation, str(cand)))
     os.rename("leaderboard.new", "leaderboard")
 
     # Generate a trial candidate for each candidate in population, kicking off evaluations as we go
@@ -265,7 +265,7 @@ while True:
 
             # Build new candidate from target and donor
             irand = random.randrange(len(donor))
-            trial = Candidate(cand_target.coeffs)
+            trial = Candidate(cand_target.coeffs, generation)
             for i in range(len(donor)):
                 if random.uniform(0.0, 1.0) < de_CR or i == irand:
                     trial.coeffs[i] = donor[i]
