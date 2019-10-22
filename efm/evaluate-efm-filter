@@ -249,7 +249,9 @@ while True:
         while True:
             # Choose three other individuals, all distinct from cand_p
             while True:
-                idx_1 = random.randrange(popsize)
+                # Use weighted choice for the first -- like the "DE/best" schemes from Storn.
+                # Add offset to score so score 0 candidates can still be chosen sometimes.
+                idx_1 = random.choices(range(popsize), weights=[cand.score + 1000 for cand in population])[0]
                 idx_2 = random.randrange(popsize)
                 idx_3 = random.randrange(popsize)
                 if len(set([idx_target, idx_1, idx_2, idx_3])) == 4:
