@@ -1,0 +1,41 @@
+#!/bin/sh -ex
+
+ldsdir=/n/stuff2/capture/laserdisc
+outdir=/d/extra/laserdisc/audio
+
+if false; then
+# PAL analogue, badly cloud-rotted (noisy but few dropouts)
+dd if=$ldsdir/MontyPython2x11-13set2_CLV_PAL_side1_4400_2019-10-11_14-57-27.lds of=rotted.lds bs=32000000 skip=600 count=10
+ld-lds-converter <rotted.lds | sox -t raw -b 16 -c 1 -e signed -r 4000000 - rotted.wav stats
+fi
+
+# ld-ldf-reader FILENAME FIRST-SAMPLE
+rate=40000000
+start=$(expr 10 \* 60 \* $rate)
+length=$(expr 30 \* $rate \* 2)
+
+if false; then
+# PAL, C1 error rate 6%
+ld-ldf-reader $ldsdir/FawltyTowersS2_CAV_PAL_side1_4400_2019-10-11_22-38-55.raw.oga $start | head -c $length >$outdir/fawlty.s16
+fi
+
+# PAL, C1 error rate 15%
+ld-ldf-reader $ldsdir/MessageToLove_CLV_PAL_side2_4400_2019-08-25_17-51-18.raw.oga $start | head -c $length >$outdir/wight.s16
+
+# PAL, C1 error rate 24%
+ld-ldf-reader $ldsdir/THX1138_CLV_PAL_side1_4400_2019-10-11_18-33-45.raw.oga $start | head -c $length >$outdir/thx.s16
+
+# PAL, ??
+ld-ldf-reader $ldsdir/Simon/"Domesday Community_CAV_PAL_side1_North DS1_2019-06-14_15-27-26.raw.oga" $start | head -c $length >$outdir/domesday.s16
+
+# NTSC, C1 error rate 7%
+ld-ldf-reader $ldsdir/WarGames_CLV_NTSC_side2_4400_2019-10-04_17-34-28.raw.oga $start | head -c $length >$outdir/wargames.s16
+
+# NTSC, C1 error rate 27%
+ld-ldf-reader $ldsdir/TheGratefulDeadMovie_CLV_NTSC_side3_4400_2019-09-17_13-03-32.raw.oga $start | head -c $length >$outdir/grateful.s16
+
+# NTSC, C1 error rate 40%
+ld-ldf-reader $ldsdir/ThisIsSpinalTap_CLV_NTSC_side1_4400_2019-09-17_19-04-03.raw.oga $start | head -c $length >$outdir/spinaltap.s16
+
+# NTSC, C1 error rate 99%
+ld-ldf-reader $ldsdir/Squibnocket_CLV_NTSC_side2_4400_2019-10-02_22-13-34.raw.oga $start | head -c $length >$outdir/squibnocket.s16
