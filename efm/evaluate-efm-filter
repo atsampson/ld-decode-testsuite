@@ -191,8 +191,12 @@ def finish_eval(cands):
         cand.score = 0
         for testcase in testcases:
             result = cand.results[testcase.name()]
-            # XXX The weighting isn't very fair here (more symbols than anything else)
-            cand.score += sum(result.values())
+            for name, value in result.items():
+                weight = 1
+                # More value for correctly-decoded frames
+                if name in ("frames", "f3", "f2", "f1"):
+                    weight = 100
+                cand.score += value * weight
 
         # Compare with target, if it has one
         dot = "."
@@ -260,7 +264,7 @@ while True:
     # Save the leaderboard to a file
     with open("leaderboard.new", "w") as f:
         for cand in population:
-            f.write("%f,%d,%s\n" % (cand.score, cand.generation, str(cand)))
+            f.write("%d,%d,%s\n" % (cand.score, cand.generation, str(cand)))
     os.rename("leaderboard.new", "leaderboard")
 
     # Generate a trial candidate for each candidate in population, kicking off evaluations as we go
