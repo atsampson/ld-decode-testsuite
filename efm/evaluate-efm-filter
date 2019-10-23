@@ -164,7 +164,7 @@ def finish_eval(cands):
     """Wait for evaluation to finish for a list of candidates, and compute
     their fitnesses."""
 
-    print("Evaluating", end="", flush=True)
+    print("Evaluating", len(cands), end="", flush=True)
 
     winners = 0
     for i, cand in enumerate(cands):
@@ -208,10 +208,10 @@ cand = Candidate({
 population.append(cand)
 submit_eval(cand)
 
-for hp_f in range(100, 800, 50):
-    for lp_rp in range(1600, 2000, 50):
-        for lp_rs in [26]: #range(22, 30, 2):
-            for lp_f in range(1800, 2200, 100):
+for hp_f in range(400, 550, 25): # range(100, 800, 50):
+    for lp_rp in range(1400, 2000, 50): # range(1600, 2000, 50):
+        for lp_rs in range(22, 30, 2):
+            for lp_f in [2100]: # range(1800, 2200, 100):
                 cand = Candidate({
                     "HP_N": 1,
                     "HP_f": 0.001e6 * hp_f, # 0.4e6,
