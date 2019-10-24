@@ -210,12 +210,12 @@ cand = Candidate({
 population.append(cand)
 submit_eval(cand)
 
-for hp_n in range(1, 3):
-    for lp_n in range(4, 7):
-        for hp_f in range(400, 550, 25): # range(100, 800, 50):
-            for lp_rp in range(1400, 2000, 50):
-                for lp_rs in [26]:
-                    for lp_f in range(1700, 2300, 100):
+for hp_n in [1]:
+    for lp_n in [4]:
+        for hp_f in [500]: #range(400, 600, 25):
+            for lp_rp in range(1800, 1950, 50):
+                for lp_rs in range(15, 24):
+                    for lp_f in range(1800, 2500, 100):
                         cand = Candidate({
                             "HP_N": hp_n,
                             "HP_f": 0.001e6 * hp_f,
