@@ -72,8 +72,9 @@ def evaluate(candidate, testcase):
     filtered = scipy.signal.lfilter(b, a, filtered)
 
     # Shaping
-    ts, hs = commpy_filters.rcosfilter(params["S_N"], params["S_alpha"], params["S_Ts"], SAMPLE_RATE)
-    filtered = scipy.signal.lfilter(hs, [1.0], filtered)
+    if params["S"]:
+        ts, hs = commpy_filters.rcosfilter(params["S_N"], params["S_alpha"], params["S_Ts"], SAMPLE_RATE)
+        filtered = scipy.signal.lfilter(hs, [1.0], filtered)
 
     if False:
         # Dump to a file for inspection
@@ -201,6 +202,7 @@ cand = Candidate({
     "LP_rp": 1.825,
     "LP_rs": 26,
     "LP_f": 2.0e6,
+    "S": True,
     "S_N": 221,
     "S_alpha": 0.5,
     "S_Ts": 1/4321800,
@@ -208,23 +210,26 @@ cand = Candidate({
 population.append(cand)
 submit_eval(cand)
 
-for hp_f in range(400, 550, 25): # range(100, 800, 50):
-    for lp_rp in range(1400, 2000, 50): # range(1600, 2000, 50):
-        for lp_rs in range(22, 30, 2):
-            for lp_f in [2100]: # range(1800, 2200, 100):
-                cand = Candidate({
-                    "HP_N": 1,
-                    "HP_f": 0.001e6 * hp_f, # 0.4e6,
-                    "LP_N": 4,
-                    "LP_rp": 0.001 * lp_rp, # 1.825,
-                    "LP_rs": 1.0 * lp_rs, # 26,
-                    "LP_f": 0.001e6 * lp_f, # 2.0e6,
-                    "S_N": 221,
-                    "S_alpha": 0.5,
-                    "S_Ts": 1/4321800,
-                    })
-                population.append(cand)
-                submit_eval(cand)
+for hp_n in range(1, 3):
+    for lp_n in range(4, 7):
+        for hp_f in range(400, 550, 25): # range(100, 800, 50):
+            for lp_rp in range(1400, 2000, 50):
+                for lp_rs in [26]:
+                    for lp_f in range(1700, 2300, 100):
+                        cand = Candidate({
+                            "HP_N": hp_n,
+                            "HP_f": 0.001e6 * hp_f,
+                            "LP_N": lp_n,
+                            "LP_rp": 0.001 * lp_rp,
+                            "LP_rs": 1.0 * lp_rs,
+                            "LP_f": 0.001e6 * lp_f,
+                            "S": True,
+                            "S_N": 221,
+                            "S_alpha": 0.5,
+                            "S_Ts": 1/4321800,
+                            })
+                        population.append(cand)
+                        submit_eval(cand)
 
 finish_eval(population)
 
