@@ -1,7 +1,17 @@
 #!/usr/bin/python3
 """
-Evaluate EFM filters by running test decodes and looking at the statistics
+Optimise EFM filters by running test decodes and looking at the statistics
 ld-process-efm produces.
+
+This uses a differential evolution approach, based on:
+
+R. Storn, "On the usage of differential evolution for function optimization",
+Proceedings of North American Fuzzy Information Processing, Berkeley, CA, USA,
+1996, pp. 519-523.
+<https://ieeexplore.ieee.org/document/534789>
+
+Kelly Fleetwood, "An Introduction to Differential Evolution"
+<https://www.maths.uq.edu.au/MASCOS/Multi-Agent04/Fleetwood.pdf>
 """
 
 import concurrent.futures
@@ -19,16 +29,45 @@ import commpy_filters
 
 SAMPLE_RATE = 40e6
 
+# lddecode_core's stock parameters
+DEFAULT_PARAMS = {
+    "HP_N": 1,
+    "HP_f": 0.4e6,
+    "LP_N": 4,
+    "LP_rp": 1.825,
+    "LP_rs": 26,
+    "LP_f": 2.0e6,
+    "S": True,
+    "S_N": 221,
+    "S_alpha": 0.5,
+    "S_Ts": 1/4321800,
+    }
+
+# Parameters to optimise.
+# name: (min, max)
+ADJUST_PARAMS = {
+    "HP_f": (0.2e6, 0.6e6),
+    "LP_rp": (1.0, 3.0),
+    "LP_rs": (10.0, 50.0),
+    "LP_f": (1.0e6, 3.0e6),
+    }
+
+# Differential evolution parameters
+DE_NP = 15 * len(ADJUST_PARAMS)
+DE_F = 0.5
+DE_CR = 0.3
+
 class Candidate:
     """A filter design to be evaluated."""
 
-    def __init__(self, params):
+    def __init__(self, params, generation=0, target=None):
         self.params = params
+        self.generation = generation
+        self.target = target
 
         self.futures = {}
         self.results = {}
         self.score = None
-        self.target = None
 
     def __str__(self):
         return "Candidate(%s)" % str(self.params)
@@ -152,12 +191,20 @@ testcases = [
     Testcase(testdir + "wargames.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "wight.s16", 1 * SAMPLE_RATE),
     ]
+testcases = [
+    Testcase(testdir + "domesday.s16", 1 * SAMPLE_RATE),
+    Testcase(testdir + "spinaltap.s16", 1 * SAMPLE_RATE),
+    Testcase(testdir + "squibnocket.s16", 1 * SAMPLE_RATE),
+    ]
 
+population = []
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
 
-def submit_eval(cand):
+def submit_eval(cand, add=False):
     """Start evaluating cand against all the testcases."""
 
+    if add:
+        population.append(cand)
     for testcase in testcases:
         cand.futures[testcase.name()] = executor.submit(evaluate, cand, testcase)
 
@@ -165,7 +212,7 @@ def finish_eval(cands):
     """Wait for evaluation to finish for a list of candidates, and compute
     their fitnesses."""
 
-    print("Evaluating", len(cands), end="", flush=True)
+    print("Evaluating", len(cands), end=" ", flush=True)
 
     winners = 0
     for i, cand in enumerate(cands):
@@ -185,65 +232,128 @@ def finish_eval(cands):
                     weight = 100
                 cand.score += value * weight
 
-        print(".", end="", flush=True)
+        # Compare with target, if it has one
+        dot = "."
+        if cand.target is not None:
+            if cand.score > population[cand.target].score:
+                # Replace it!
+                population[cand.target] = cand
+                dot = "!"
+                winners += 1
+            cand.target = None
+
+        # Print progress
+        print(dot, end="", flush=True)
         remaining = len(cands) - i
         if (remaining % 20) == 0:
             print(remaining, end="", flush=True)
 
-    print()
+    print(" ", winners, "improvements")
 
-population = []
+# Generate the initial population
 
-# lddecode_core's stock config, for comparison
-cand = Candidate({
-    "HP_N": 1,
-    "HP_f": 0.4e6,
-    "LP_N": 4,
-    "LP_rp": 1.825,
-    "LP_rs": 26,
-    "LP_f": 2.0e6,
-    "S": True,
-    "S_N": 221,
-    "S_alpha": 0.5,
-    "S_Ts": 1/4321800,
-    })
-population.append(cand)
-submit_eval(cand)
+if True:
+    # Default params, as a baseline
+    submit_eval(Candidate(DEFAULT_PARAMS), True)
 
-for hp_n in [1]:
-    for lp_n in [4]:
-        for hp_f in [500]: #range(400, 600, 25):
-            for lp_rp in range(1800, 1950, 50):
-                for lp_rs in range(15, 24):
-                    for lp_f in range(1800, 2500, 100):
-                        cand = Candidate({
-                            "HP_N": hp_n,
-                            "HP_f": 0.001e6 * hp_f,
-                            "LP_N": lp_n,
-                            "LP_rp": 0.001 * lp_rp,
-                            "LP_rs": 1.0 * lp_rs,
-                            "LP_f": 0.001e6 * lp_f,
-                            "S": True,
-                            "S_N": 221,
-                            "S_alpha": 0.5,
-                            "S_Ts": 1/4321800,
+if True:
+    # A good one trained on squibnocket
+    submit_eval(Candidate({'HP_N': 1, 'HP_f': 532183.4931131185, 'LP_N': 4, 'LP_rp': 2.483006579041091, 'LP_rs': 25.641978206028153, 'LP_f': 2139750.8407969275, 'S': True, 'S_N': 221, 'S_alpha': 0.5, 'S_Ts': 2.3138507103521682e-07}), True)
+
+if False:
+    # Explore a range of parameters explicitly
+    for hp_n in [1]:
+        for lp_n in [4]:
+            for hp_f in [500]: #range(400, 600, 25):
+                for lp_rp in range(1800, 1950, 50):
+                    for lp_rs in range(15, 24):
+                        for lp_f in range(1800, 2500, 100):
+                            params = DEFAULT_PARAMS.copy()
+                            params.update({
+                                "HP_N": hp_n,
+                                "HP_f": 0.001e6 * hp_f,
+                                "LP_N": lp_n,
+                                "LP_rp": 0.001 * lp_rp,
+                                "LP_rs": 1.0 * lp_rs,
+                                "LP_f": 0.001e6 * lp_f,
                             })
-                        population.append(cand)
-                        submit_eval(cand)
+                            submit_eval(Candidate(params), True)
 
+# Fill out the remainder with random candidates
+while len(population) < DE_NP:
+    params = DEFAULT_PARAMS.copy()
+    for name, minmax in ADJUST_PARAMS.items():
+        params[name] = random.uniform(minmax[0], minmax[1])
+    submit_eval(Candidate(params), True)
+
+# Evaluate the initial population
 finish_eval(population)
 
-# Sort best first
-population.sort(key=lambda cand: -cand.score)
+# Evolve
+generation = 0
+while True:
+    generation += 1
 
-# Show the leaderboard
-print()
-print("%-20s %s" % ("Score", "Candidate"))
-for cand in population:
-    print("%-20d" % cand.score, str(cand))
-    for testcase in testcases:
-        print("    %-20s %s" % (os.path.basename(testcase.filename), str(cand.results[testcase.name()])))
-scores = [cand.score for cand in population]
-print("Scores:", " ".join([str(score) for score in scores]))
-print("Score stats:", scipy.stats.describe(scores))
-print()
+    # Sort best first
+    population.sort(key=lambda cand: -cand.score)
+
+    # Show the leaderboard
+    print()
+    print("Generation", generation, "leaderboard")
+    print("%-15s %-10s %s" % ("Score", "Generation", "Candidate"))
+    for cand in population[:10]:
+        print("%-15d %-10d" % (cand.score, cand.generation), str(cand))
+        for testcase in testcases:
+            print("    %-20s %s" % (os.path.basename(testcase.filename),
+                                    str(cand.results[testcase.name()])))
+    scores = [cand.score for cand in population]
+    print("Scores:", " ".join([str(score) for score in scores]))
+    if len(scores) > 1:
+        print("Score stats:", scipy.stats.describe(scores))
+    print()
+
+    # Save the leaderboard to a file
+    with open("leaderboard.new", "w") as f:
+        for cand in population:
+            f.write("%d,%d,%s\n" % (cand.score, cand.generation, str(cand)))
+    os.rename("leaderboard.new", "leaderboard")
+
+    # Generate a trial candidate for each candidate in population, kicking off evaluations as we go
+    print("Mutating...")
+    trials = []
+    popsize = len(population)
+    for idx_target, cand_target in enumerate(population):
+        while True:
+            # Choose three other individuals, all distinct from cand_p
+            while True:
+                # Use weighted choice for the first -- like the "DE/best" schemes from Storn.
+                # Add offset to score so score 0 candidates can still be chosen sometimes.
+                idx_1 = random.choices(range(popsize), weights=[cand.score + 1000 for cand in population])[0]
+                idx_2 = random.randrange(popsize)
+                idx_3 = random.randrange(popsize)
+                if len(set([idx_target, idx_1, idx_2, idx_3])) == 4:
+                    break
+            cand_1 = population[idx_1]
+            cand_2 = population[idx_2]
+            cand_3 = population[idx_3]
+
+            # Build params for the new trial candidate
+            trial_params = cand_target.params.copy()
+            for name, minmax in ADJUST_PARAMS.items():
+                # Replace this param?
+                if random.random() < DE_CR:
+                    # Yes - compute the donor value for it
+                    trial_params[name] = cand_1.params[name] + (DE_F * (cand_2.params[name] - cand_3.params[name]))
+
+            # Are all the params in range?
+            if all(trial_params[name] >= minmax[0]
+                   and trial_params[name] <= minmax[1]
+                   for name, minmax in ADJUST_PARAMS.items()):
+                break
+
+        trial = Candidate(trial_params, generation, idx_target)
+        submit_eval(trial)
+        trials.append(trial)
+
+    # Finish evaluations, inserting successful trials into population
+    finish_eval(trials)
