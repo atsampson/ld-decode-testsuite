@@ -71,7 +71,7 @@ class Candidate:
         self.score = None
 
     def __str__(self):
-        return "Candidate(%s)" % str(self.params)
+        return "Candidate(%s, %s)" % (str(self.params), str(self.generation))
 
 class Testcase:
     """An RF sample that can be decoded."""
@@ -254,13 +254,25 @@ def finish_eval(cands):
 
 # Generate the initial population
 
-if True:
+# Reload from leaderboard, if it exists
+try:
+    with open("leaderboard", "r") as f:
+        print("Loading existing leaderboard...")
+        for line in f.readlines():
+            fields = line.rstrip().split(",", 2)
+            cand = eval(fields[2])
+            # XXX Not needed once all files have the generation in anyway
+            cand.generation = int(fields[1])
+            submit_eval(cand, True)
+
+    generation = max(cand.generation for cand in population)
+except FileNotFoundError:
+    # Starting from scratch
+    generation = 0
+
+if False:
     # Default params, as a baseline
     submit_eval(Candidate(DEFAULT_PARAMS), True)
-
-if True:
-    # A good one trained on squibnocket
-    submit_eval(Candidate({'HP_N': 1, 'HP_f': 532183.4931131185, 'LP_N': 4, 'LP_rp': 2.483006579041091, 'LP_rs': 25.641978206028153, 'LP_f': 2139750.8407969275, 'S': True, 'S_N': 221, 'S_alpha': 0.5, 'S_Ts': 2.3138507103521682e-07}), True)
 
 if False:
     # Explore a range of parameters explicitly
@@ -292,7 +304,6 @@ while len(population) < DE_NP:
 finish_eval(population)
 
 # Evolve
-generation = 0
 while True:
     generation += 1
 
