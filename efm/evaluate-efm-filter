@@ -33,6 +33,7 @@ SAMPLE_RATE = 40e6
 DEFAULT_PARAMS = {
     "HP_N": 1,
     "HP_f": 0.4e6,
+    "LP_twice": True,
     "LP_N": 4,
     "LP_rp": 1.825,
     "LP_rs": 26,
@@ -106,9 +107,10 @@ def evaluate(candidate, testcase):
 
     # Lowpass
     b, a = scipy.signal.ellip(params["LP_N"], params["LP_rp"], params["LP_rs"], [params["LP_f"]], fs=SAMPLE_RATE)
+    filtered = scipy.signal.lfilter(b, a, filtered)
     # This gets applied twice in FFT form
-    filtered = scipy.signal.lfilter(b, a, filtered)
-    filtered = scipy.signal.lfilter(b, a, filtered)
+    if params["LP_twice"]:
+        filtered = scipy.signal.lfilter(b, a, filtered)
 
     # Shaping
     if params["S"]:
