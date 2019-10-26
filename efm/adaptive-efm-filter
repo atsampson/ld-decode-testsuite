@@ -1,0 +1,132 @@
+#!/usr/bin/python3
+# Filter an EFM signal adaptively so its spectrum has the expected shape.
+# (Not working properly yet.)
+
+import numpy
+import pyfftw
+import scipy.signal
+import sys
+
+# XXX Process blocks in parallel using futures
+# XXX Decimate to 4 MHz (which would need modifications to ld-ldstoefm)
+# XXX Normalise the output (i.e. have a slow AGC)
+
+SAMPLE_RATE = 40e6
+
+BIN_SIZE = 0.1e6
+BIN_LIMIT = 2.2e6
+NUM_BINS = int(BIN_LIMIT / BIN_SIZE)
+
+# Measured using encode-efm
+WANT_BINS = numpy.array([
+#    0.13875550467587924, 0.5301562971796531, 0.6984553525266136, 0.7836307143198967, 1.0, 0.9115118843067416, 0.8779754197752704, 0.5236323453131688, 0.44425839747406337, 0.3086906134526273, 0.26866785258138226, 0.24461984198748207, 0.1985960056002786, 0.2170757116777444, 0.1796219701452751, 0.15184672114555156, 0.15290585872554321, 0.18851489437606092, 0.20441644897429176, 0.1844619511824715, 0.15359332041060728, 0.19263249241253136, 0.1745282465167042, 0.14033353998472112, 0.1461324857326838
+    # 0    .1   .2   .3      .4    .5    .6    .7    .8    .9   1.0   1.1   1.2   1.3   1.4   1.5   1.6   1.7   1.8   1.9   2.0   2.1
+    0.05, 0.41, 0.68, 0.77, 1.00, 0.99, 0.87, 0.52, 0.44, 0.31, 0.27, 0.24, 0.20, 0.22, 0.18, 0.15, 0.15, 0.19, 0.20, 0.18, 0.15, 0.19
+    ], numpy.float64)
+
+REAL_SIZE = 1 << 16
+HALF_SIZE = REAL_SIZE // 2
+COMPLEX_SIZE = (REAL_SIZE // 2) + 1
+
+COMPLEX_PER_BIN = (BIN_SIZE / (SAMPLE_RATE / 2)) * COMPLEX_SIZE
+MAG_SMOOTH = numpy.ones(int(COMPLEX_PER_BIN)) / int(COMPLEX_PER_BIN)
+
+def get_bins(magnitudes):
+    # Smooth frequency response using moving average
+    # XXX This doesn't really need to compute every element
+    magnitudes = scipy.signal.convolve(magnitudes, MAG_SMOOTH, mode='same')
+
+    # XXX This is ugly
+    print("Magnitudes:")
+    bin_mags = numpy.zeros(NUM_BINS)
+    for i in range(NUM_BINS):
+        f = BIN_SIZE * i
+        j = int(i * COMPLEX_PER_BIN)
+        print("%10f %10f" % (f, magnitudes[j]))
+        bin_mags[i] = magnitudes[j]
+
+    # Normalise
+    # XXX div by zero
+    return bin_mags / numpy.max(bin_mags)
+
+def analyse():
+    # Plan the forward and inverse FFTs
+    fft_real = pyfftw.empty_aligned(REAL_SIZE, numpy.float64)
+    fft_complex = pyfftw.empty_aligned(COMPLEX_SIZE, numpy.complex128)
+    forward_fft = pyfftw.FFTW(fft_real, fft_complex)
+    inverse_fft = pyfftw.FFTW(fft_complex, fft_real, direction='FFTW_BACKWARD')
+
+    # Symmetric window for the FFT, so we can just add output blocks together
+    forward_window = scipy.signal.windows.hann(REAL_SIZE, sym=False)
+
+    moving_magnitudes = numpy.zeros(COMPLEX_SIZE, numpy.float64)
+    total_magnitudes = numpy.zeros(COMPLEX_SIZE, numpy.float64)
+    prev_data = numpy.zeros(HALF_SIZE, numpy.int16)
+    output = numpy.zeros(REAL_SIZE, numpy.float64)
+
+    fo = open("/var/tmp/filtered.s16", "wb")
+
+    block_num = -1
+    while True:
+        block_num += 1
+
+        # We advance half a block at a time, so the FFT always overlaps by half
+        # a block. Read the next REAL_SIZE/2 samples.
+        s = sys.stdin.buffer.read(REAL_SIZE)
+        if s == b"":
+            break
+        # XXX Pad out if not complete and make sure we don't lose anything at the end
+        if len(s) < REAL_SIZE:
+            break
+        data = numpy.frombuffer(s, numpy.int16)
+
+        # Make up the complete input block
+        fft_real[:HALF_SIZE] = prev_data
+        fft_real[HALF_SIZE:] = data
+        prev_data = data
+
+        # Apply the window function and do the FFT.
+        # This is a real-to-complex FFT so the result has frequencies 0 to SAMPLE_RATE / 2.
+        fft_real *= forward_window
+        forward_fft()
+
+        # Compute magnitudes and update moving average
+        magnitudes = numpy.abs(fft_complex)
+        moving_magnitudes *= 0.6
+        moving_magnitudes += magnitudes * 0.4
+        total_magnitudes += magnitudes
+
+        # Compute the gains
+        moving_bins = get_bins(moving_magnitudes)
+        freqs = [i * BIN_SIZE for i in range(NUM_BINS)] + [BIN_LIMIT, SAMPLE_RATE / 2]
+        # XXX division by zero etc. etc.
+        gains = list(WANT_BINS / moving_bins) + [0.0, 0.0]
+        print(list(zip(freqs, gains)))
+
+        # Design the frequency-domain filter.
+        # This is actually doing an IFFT then an FFT underneath to get our original
+        # frequency spec into complex form [Smith ch18].
+        b, a = scipy.signal.firwin2(500, freqs, gains, fs=SAMPLE_RATE), [1.0]
+        lpf_complex = scipy.signal.freqz(b, a, COMPLEX_SIZE, whole=False)[1]
+
+        # Apply the filter
+        fft_complex *= lpf_complex
+
+        # Do the inverse FFT
+        inverse_fft()
+
+        # Shift the output buffer along and merge in the new block
+        output[:HALF_SIZE] = output[HALF_SIZE:] + fft_real[:HALF_SIZE]
+        output[HALF_SIZE:] = fft_real[HALF_SIZE:]
+
+        # Write out the completed half-block
+        if block_num > 0:
+            output[:HALF_SIZE].astype(numpy.int16).tofile(fo)
+
+    fo.close()
+
+    print("Total bins:")
+    print(list(get_bins(total_magnitudes)))
+
+if __name__ == "__main__":
+    analyse()
