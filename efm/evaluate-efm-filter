@@ -47,9 +47,9 @@ DEFAULT_PARAMS = {
 # Parameters to optimise.
 # name: (min, max)
 ADJUST_PARAMS = {
-    "HP_f": (0.2e6, 0.6e6),
-    "LP_rp": (1.0, 3.0),
-    "LP_rs": (10.0, 50.0),
+    "HP_f": (0.1e6, 2.0e6),
+    "LP_rp": (0.1, 6.0),
+    "LP_rs": (10.0, 70.0),
     "LP_f": (1.0e6, 3.0e6),
     }
 
