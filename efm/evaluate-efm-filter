@@ -230,8 +230,8 @@ def finish_eval(cands):
             for name, value in result.items():
                 weight = 1
                 # More value for correctly-decoded frames
-                if name in ("frames", "f3", "f2", "f1"):
-                    weight = 100
+                if name in ("f3", "f2", "f1"):
+                    weight = 1000
                 cand.score += value * weight
 
         # Compare with target, if it has one
