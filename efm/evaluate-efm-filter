@@ -180,20 +180,17 @@ def evaluate(candidate, testcase):
 
     return counts
 
-# To produce a testcase, do something like:
 # XXX Better to load only one at a time into memory?
 testdir = "/d/extra/laserdisc/audio/"
 testcases = [
-    Testcase(testdir + "domesday.s16", 1 * SAMPLE_RATE),
+    # Easy samples
     Testcase(testdir + "fawlty.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "grateful.s16", 1 * SAMPLE_RATE),
-    Testcase(testdir + "spinaltap.s16", 1 * SAMPLE_RATE),
-    Testcase(testdir + "squibnocket.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "thx.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "wargames.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "wight.s16", 1 * SAMPLE_RATE),
-    ]
-testcases = [
+
+    # Difficult samples
     Testcase(testdir + "domesday.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "spinaltap.s16", 1 * SAMPLE_RATE),
     Testcase(testdir + "squibnocket.s16", 1 * SAMPLE_RATE),
