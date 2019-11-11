@@ -262,7 +262,7 @@ blocks:
     alias: ''
     begin_tag: pmt.PMT_NIL
     comment: ''
-    file: /d/extra/laserdisc/fawlty.s16
+    file: /d/extra/laserdisc/audio/fawlty.s16
     length: 10*samp_rate
     maxoutbuf: '0'
     minoutbuf: '0'
