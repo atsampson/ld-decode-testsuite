@@ -17,6 +17,7 @@ Kelly Fleetwood, "An Introduction to Differential Evolution"
 import concurrent.futures
 import numpy
 import os
+import pyfftw
 import random
 import re
 import scipy.signal
@@ -210,6 +211,100 @@ class LDDEvaluator(Evaluator):
 
         return filtered
 
+class FFTEvaluator(Evaluator):
+    """Evaluate an FFT-based filter with amplitude and phase adjustments
+    applied in the frequency domain using polynomials.
+
+    This is based on the input signal equaliser in Joe Taylor's WSJT-X."""
+
+    # No amplitude or phase change by default.
+    DEFAULT_PARAMS = {
+        "a0": 1.0,
+        "a1": 0.0,
+        "a2": 0.0,
+        #"a3": 0.0,
+        #"a4": 0.0,
+        "p0": 0.0,
+        "p1": 0.0,
+        "p2": 0.0,
+        #"p3": 0.0,
+        #"p4": 0.0,
+        }
+
+    ADJUST_PARAMS = {k: (-1.0, 1.0) for k in DEFAULT_PARAMS.keys()}
+    del ADJUST_PARAMS["p0"] # constant phase offset is pointless
+
+    # FFT size parameters.
+    # We will apply the FFT to REAL_SIZE samples at a time, in blocks that
+    # overlap by HALF_SIZE samples.
+    REAL_SIZE = 1 << 16
+    HALF_SIZE = REAL_SIZE // 2
+    COMPLEX_SIZE = (REAL_SIZE // 2) + 1
+
+    def filter(self, params, data):
+        # Aligned buffers for FFT input/output
+        fft_real = pyfftw.empty_aligned(self.REAL_SIZE, numpy.float64)
+        fft_complex = pyfftw.empty_aligned(self.COMPLEX_SIZE, numpy.complex128)
+
+        # Plan the forward and inverse FFTs.
+        # (This will be expensive the first time only.)
+        forward_fft = pyfftw.FFTW(fft_real, fft_complex)
+        inverse_fft = pyfftw.FFTW(fft_complex, fft_real,
+                                       direction='FFTW_BACKWARD')
+
+        # Symmetric window for the FFT, so we can just add output blocks together
+        forward_window = scipy.signal.windows.hann(self.REAL_SIZE, sym=False)
+
+        # Compute the coefficient for each FFT bin by evaluating the polynomials
+        indexes = numpy.arange(0, self.COMPLEX_SIZE) / self.COMPLEX_SIZE
+        a_coeffs = numpy.zeros(self.COMPLEX_SIZE)
+        p_coeffs = numpy.zeros(self.COMPLEX_SIZE)
+        for i in range(3):
+            a_coeffs += params["a%d" % i] * (indexes ** i)
+            p_coeffs += params["p%d" % i] * (indexes ** i)
+        # Scale by the amplitude, rotate by the phase
+        ap_filter = a_coeffs * (numpy.cos(p_coeffs) + (complex(0, -1) * numpy.sin(p_coeffs)))
+
+        # Work through the input data in HALF_SIZE blocks.
+        # We must overlap by half a block at each end.
+        length = len(data)
+        output = numpy.zeros(length, numpy.float64)
+        prev_block = numpy.zeros(self.HALF_SIZE, numpy.int16)
+        for pos in range(0, length + self.HALF_SIZE, self.HALF_SIZE):
+            # Copy data from the input, padding with zeroes
+            right = min(length, pos + self.HALF_SIZE)
+            if (right - pos) == self.HALF_SIZE:
+                block = data[pos:right]
+            else:
+                block_right = max(0, right - pos)
+                block = numpy.zeros(self.HALF_SIZE, numpy.int16)
+                block[:block_right] = data[pos:right]
+
+            # Make up the FFT's input
+            fft_real[:self.HALF_SIZE] = prev_block
+            fft_real[self.HALF_SIZE:] = block
+            prev_block = block
+
+            # Apply the window function and do the FFT.
+            # This is a real-to-complex FFT so the result has frequencies 0 to
+            # SAMPLE_RATE / 2.
+            fft_real *= forward_window
+            forward_fft()
+
+            # Apply the frequency-domain filter
+            fft_complex *= ap_filter
+
+            # Do the inverse FFT
+            inverse_fft()
+
+            # Merge the inverse FFT output into the output buffer
+            orig_left = pos - self.HALF_SIZE
+            left = max(0, orig_left)
+            right = min(length, pos + self.HALF_SIZE)
+            output[left:right] += fft_real[left - orig_left:right - orig_left]
+
+        return output
+
 # XXX Better to load only one at a time into memory?
 testdir = "/d/extra/laserdisc/audio/"
 testcases = [
@@ -227,7 +322,7 @@ testcases = [
     ]
 
 population = []
-evaluator = LDDEvaluator()
+evaluator = FFTEvaluator()
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
 
 def submit_eval(cand, add=False):
