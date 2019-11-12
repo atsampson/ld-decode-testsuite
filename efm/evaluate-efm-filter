@@ -219,20 +219,34 @@ class FFTEvaluator(Evaluator):
 
     # No amplitude or phase change by default.
     DEFAULT_PARAMS = {
+        "HP_N": 1,
+        "HP_f": 0.4e6,
+        "LP_twice": True,
+        "LP_N": 4,
+        "LP_rp": 1.825,
+        "LP_rs": 26,
+        "LP_f": 2.0e6,
+        "S": True,
+        "S_N": 221,
+        "S_alpha": 0.5,
+        "S_Ts": 1/4321800,
+
         "a0": 1.0,
         "a1": 0.0,
         "a2": 0.0,
-        #"a3": 0.0,
-        #"a4": 0.0,
+        "a3": 0.0,
+        "a4": 0.0,
         "p0": 0.0,
         "p1": 0.0,
         "p2": 0.0,
-        #"p3": 0.0,
-        #"p4": 0.0,
+        "p3": 0.0,
+        "p4": 0.0,
         }
 
-    ADJUST_PARAMS = {k: (-1.0, 1.0) for k in DEFAULT_PARAMS.keys()}
-    del ADJUST_PARAMS["p0"] # constant phase offset is pointless
+    #ADJUST_PARAMS = {k: (-1.0, 1.0) for k in DEFAULT_PARAMS.keys()}
+    #del ADJUST_PARAMS["p0"] # constant phase offset is pointless
+    # XXX adjust phase equalisation only
+    ADJUST_PARAMS = {k: (-1.0, 1.0) for k in ["p1", "p2"]}
 
     # FFT size parameters.
     # We will apply the FFT to REAL_SIZE samples at a time, in blocks that
@@ -242,6 +256,27 @@ class FFTEvaluator(Evaluator):
     COMPLEX_SIZE = (REAL_SIZE // 2) + 1
 
     def filter(self, params, data):
+        # --- lddecode_core-style filters ---
+
+        # Highpass
+        b, a = scipy.signal.butter(params["HP_N"], [params["HP_f"]], btype="high", fs=SAMPLE_RATE)
+        data = scipy.signal.lfilter(b, a, data)
+
+        # Lowpass
+        b, a = scipy.signal.ellip(params["LP_N"], params["LP_rp"], params["LP_rs"], [params["LP_f"]], fs=SAMPLE_RATE)
+        data = scipy.signal.lfilter(b, a, data)
+        # This gets applied twice in FFT form
+        if params["LP_twice"]:
+            data = scipy.signal.lfilter(b, a, data)
+
+        # Shaping
+        if params["S"]:
+            ts, hs = commpy_filters.rcosfilter(params["S_N"], params["S_alpha"], params["S_Ts"], SAMPLE_RATE)
+            data = scipy.signal.lfilter(hs, [1.0], data)
+
+        # --- FFT equaliser ---
+        # (with the aim of moving the filter shape above into the FFT later)
+
         # Aligned buffers for FFT input/output
         fft_real = pyfftw.empty_aligned(self.REAL_SIZE, numpy.float64)
         fft_complex = pyfftw.empty_aligned(self.COMPLEX_SIZE, numpy.complex128)
