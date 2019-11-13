@@ -219,17 +219,7 @@ class FFTEvaluator(Evaluator):
 
     # No amplitude or phase change by default.
     DEFAULT_PARAMS = {
-        "HP_N": 1,
-        "HP_f": 0.4e6,
-        "LP_twice": True,
-        "LP_N": 4,
-        "LP_rp": 1.825,
-        "LP_rs": 26,
-        "LP_f": 2.0e6,
-        "S": True,
-        "S_N": 221,
-        "S_alpha": 0.5,
-        "S_Ts": 1/4321800,
+        "cutoff": 2.1e6,
 
         "a0": 1.0,
         "a1": 0.0,
@@ -245,8 +235,7 @@ class FFTEvaluator(Evaluator):
 
     #ADJUST_PARAMS = {k: (-1.0, 1.0) for k in DEFAULT_PARAMS.keys()}
     #del ADJUST_PARAMS["p0"] # constant phase offset is pointless
-    # XXX adjust phase equalisation only
-    ADJUST_PARAMS = {k: (-1.0, 1.0) for k in ["p1", "p2"]}
+    ADJUST_PARAMS = {k: (-1.0, 1.0) for k in ["a0", "a1", "a2", "p1", "p2"]} # XXX
 
     # FFT size parameters.
     # We will apply the FFT to REAL_SIZE samples at a time, in blocks that
@@ -255,28 +244,10 @@ class FFTEvaluator(Evaluator):
     HALF_SIZE = REAL_SIZE // 2
     COMPLEX_SIZE = (REAL_SIZE // 2) + 1
 
+    # The width of each bin in Hz
+    FREQ_PER_BIN = (SAMPLE_RATE / 2) / COMPLEX_SIZE
+
     def filter(self, params, data):
-        # --- lddecode_core-style filters ---
-
-        # Highpass
-        b, a = scipy.signal.butter(params["HP_N"], [params["HP_f"]], btype="high", fs=SAMPLE_RATE)
-        data = scipy.signal.lfilter(b, a, data)
-
-        # Lowpass
-        b, a = scipy.signal.ellip(params["LP_N"], params["LP_rp"], params["LP_rs"], [params["LP_f"]], fs=SAMPLE_RATE)
-        data = scipy.signal.lfilter(b, a, data)
-        # This gets applied twice in FFT form
-        if params["LP_twice"]:
-            data = scipy.signal.lfilter(b, a, data)
-
-        # Shaping
-        if params["S"]:
-            ts, hs = commpy_filters.rcosfilter(params["S_N"], params["S_alpha"], params["S_Ts"], SAMPLE_RATE)
-            data = scipy.signal.lfilter(hs, [1.0], data)
-
-        # --- FFT equaliser ---
-        # (with the aim of moving the filter shape above into the FFT later)
-
         # Aligned buffers for FFT input/output
         fft_real = pyfftw.empty_aligned(self.REAL_SIZE, numpy.float64)
         fft_complex = pyfftw.empty_aligned(self.COMPLEX_SIZE, numpy.complex128)
@@ -294,11 +265,15 @@ class FFTEvaluator(Evaluator):
         indexes = numpy.arange(0, self.COMPLEX_SIZE) / self.COMPLEX_SIZE
         a_coeffs = numpy.zeros(self.COMPLEX_SIZE)
         p_coeffs = numpy.zeros(self.COMPLEX_SIZE)
-        for i in range(3):
+        for i in range(5):
             a_coeffs += params["a%d" % i] * (indexes ** i)
             p_coeffs += params["p%d" % i] * (indexes ** i)
         # Scale by the amplitude, rotate by the phase
         ap_filter = a_coeffs * (numpy.cos(p_coeffs) + (complex(0, -1) * numpy.sin(p_coeffs)))
+
+        # Zero coefficients above the cutoff frequency.
+        # XXX This should at least be smoothed a bit to make a proper LPF.
+        ap_filter[int(params["cutoff"] / self.FREQ_PER_BIN):] = 0
 
         # Work through the input data in HALF_SIZE blocks.
         # We must overlap by half a block at each end.
@@ -433,7 +408,7 @@ if False:
     submit_eval(Candidate(evaluator.DEFAULT_PARAMS), True)
 
 if False:
-    # Explore a range of parameters explicitly
+    # Explore a range of LDDEvaluator parameters explicitly
     for hp_n in [1]:
         for lp_n in [4]:
             for hp_f in [500]: #range(400, 600, 25):
@@ -450,6 +425,15 @@ if False:
                                 "LP_f": 0.001e6 * lp_f,
                             })
                             submit_eval(Candidate(params), True)
+
+if False:
+    # Explore a range of FFTEvaluator parameters explicitly
+    for cutoff in range(1500, 2500, 100):
+        params = evaluator.DEFAULT_PARAMS.copy()
+        params.update({
+            "cutoff": 0.001e6 * cutoff,
+        })
+        submit_eval(Candidate(params), True)
 
 # Fill out the remainder with random candidates
 want_population = DE_NP * len(evaluator.ADJUST_PARAMS)
