@@ -55,28 +55,30 @@ class GUI:
 
         # Grid layout
         grid = Gtk.Grid()
+        grid.set_column_spacing(10)
         window.add(grid)
-        grid_w = 2
+        grid_w = 4
 
         # matplotlib charts
-        # XXX remove padding
         figure = matplotlib.figure.Figure()
+        figure.set_tight_layout(True)
         nrows, ncols = 2, 1
         self.before_ax = figure.add_subplot(nrows, ncols, 1)
         self.after_ax = figure.add_subplot(nrows, ncols, 2)
         self.canvas = matplotlib.backends.backend_gtk3cairo.FigureCanvasGTK3Cairo(figure)
-        self.canvas.set_size_request(1000 * ncols, 200 * nrows)
+        self.canvas.set_size_request(1200 * ncols, 200 * nrows)
         grid.attach(self.canvas, 0, 0, grid_w, 1)
 
+        col = 0
         row_count = [1]
         def add_scale(name):
             label = Gtk.Label.new(name)
-            grid.attach(label, 0, row_count[0], 1, 1)
+            grid.attach(label, col, row_count[0], 1, 1)
 
             scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL)
             scale.set_hexpand(True)
             scale.set_value_pos(Gtk.PositionType.RIGHT)
-            grid.attach(scale, 1, row_count[0], 1, 1)
+            grid.attach(scale, col + 1, row_count[0], 1, 1)
 
             row_count[0] += 1
             return scale
@@ -85,7 +87,7 @@ class GUI:
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
 
-        # Equaliser widgets
+        # Amplitude equaliser widgets
         self.freqs = np.linspace(0.0e6, 2.0e6, num=11)
         self.amp_scales = []
         for freq in self.freqs:
@@ -95,6 +97,11 @@ class GUI:
             scale.set_round_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.amp_scales.append(scale)
+
+        col = 2
+        row_count = [2]
+
+        # Phase equaliser widgets
         self.phase_scales = []
         for freq in self.freqs:
             scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
