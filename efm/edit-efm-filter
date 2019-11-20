@@ -4,16 +4,18 @@
 # XXX Draw eye diagram, or histogram of zero crossing lengths
 # XXX Run decoder in the background
 
+import concurrent.futures
 import gi
 import matplotlib.backends.backend_gtk3cairo
 import matplotlib.figure
 import numpy as np
+import os
 import scipy.interpolate as spi
 import scipy.signal as sps
 import sys
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import GLib, Gtk
 
 from efmfilter import SAMPLE_RATE, FFTFilter
 
@@ -34,6 +36,9 @@ class GUI:
         self.chart_length = 1000
 
         self.fft = FFTFilter()
+
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
+        self.futures = []
 
         # Generate simple LPF for the "before" chart
         self.lpf_b, self.lpf_a = sps.firwin(numtaps=31, cutoff=2.0e6, fs=SAMPLE_RATE), [1.0]
@@ -121,18 +126,29 @@ class GUI:
 
     def update_filter(self):
         """Update the GUI for a change in filter parameters."""
-        # XXX Do this asynchronously
 
-        start_pos = self.current_file.offset
-        end_pos = start_pos + self.chart_length
-        input_data = self.current_file.data[start_pos:end_pos]
-        x_range = range(start_pos, end_pos)
+        start = self.current_file.offset
+        end = start + self.chart_length
+        self.input_data = self.current_file.data[start:end]
+        self.input_range = range(start, end)
 
+        # Cancel any already-scheduled background jobs if possible.
+        # (This will include any that have already started or completed from
+        # the last time we did this, but that's harmless.)
+        for future in self.futures:
+            future.cancel()
+        self.futures = []
+
+        # Start calculations in the background
+        self.futures.append(self.executor.submit(self.update_before))
+        self.futures.append(self.executor.submit(self.update_after))
+
+    def update_before(self):
         # Filter and plot the "before" chart
-        before_data = sps.lfilter(self.lpf_b, self.lpf_a, input_data)
-        self.before_ax.clear()
-        self.before_ax.plot(x_range, before_data)
+        before_data = sps.lfilter(self.lpf_b, self.lpf_a, self.input_data)
+        GLib.idle_add(self.plot_chart, self.before_ax, before_data)
 
+    def update_after(self):
         # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
         # Anything above the highest frequency is left as zero.
         a_values = [w.get_value() for w in self.amp_scales]
@@ -150,13 +166,18 @@ class GUI:
         # Filter and plot the "after" chart
         def freqfunc(comp):
             comp *= ap_filter
-        after_data = self.fft.apply(input_data, freqfunc)
-        self.after_ax.clear()
-        self.after_ax.plot(x_range, after_data)
+        after_data = self.fft.apply(self.input_data, freqfunc)
+        GLib.idle_add(self.plot_chart, self.after_ax, after_data)
 
-        # Tweak appearance of both charts
-        for ax in (self.before_ax, self.after_ax):
-            ax.grid(True)
+    def plot_chart(self, ax, y_data):
+        """Idle callback to update the before or after chart."""
+
+        # XXX This is still a bit clunky, as the plotting itself is expensive...
+        ax.clear()
+        ax.plot(self.input_range, y_data)
+
+        # Tweak appearance
+        ax.grid(True)
 
         self.canvas.draw()
 
