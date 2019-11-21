@@ -183,16 +183,16 @@ class GUI:
     def update_before(self):
         # Filter and plot the "before" chart
         before_data = sps.lfilter(self.lpf_b, self.lpf_a, self.input_data)
-        GLib.idle_add(self.plot_chart, self.before_ax, before_data)
+        GLib.idle_add(self.plot_chart, self.before_ax, before_data, "Low-pass filtered signal")
 
     def update_after(self):
         # Filter and plot the "after" chart
         def freqfunc(comp):
             comp *= self.ap_filter
         after_data = self.fft.apply(self.input_data, freqfunc)
-        GLib.idle_add(self.plot_chart, self.after_ax, after_data)
+        GLib.idle_add(self.plot_chart, self.after_ax, after_data, "Equalised signal")
 
-    def plot_chart(self, ax, y_data):
+    def plot_chart(self, ax, y_data, title):
         """Idle callback to update the before or after chart."""
 
         # XXX This is still a bit clunky, as the plotting itself is expensive...
@@ -201,6 +201,7 @@ class GUI:
 
         # Tweak appearance
         ax.grid(True)
+        ax.set_title(title)
 
         self.canvas.draw()
 
@@ -234,6 +235,8 @@ class GUI:
 
         self.zcs_ax.clear()
         self.zcs_ax.hist(spacings, bins=100, range=(20, 120))
+
+        self.zcs_ax.set_title("Zero-crossing spacings")
 
         self.canvas.draw()
 
