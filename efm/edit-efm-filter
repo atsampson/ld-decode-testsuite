@@ -206,10 +206,12 @@ class GUI:
         self.canvas.draw()
 
     def update_zc(self):
-        # Filter the start of the data
+        # Filter the input data from the selected position
         def freqfunc(comp):
             comp *= self.ap_filter
-        zc_data = self.fft.apply(self.current_file.data[:self.zc_length], freqfunc)
+        start = self.current_file.offset
+        end = min(start + self.zc_length, len(self.current_file.data))
+        zc_data = self.fft.apply(self.current_file.data[start:end], freqfunc)
 
         # Find locations of zero crossings.
         # XXX This may need hysteresis as in ld-ldstoefm?
