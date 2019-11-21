@@ -1,5 +1,12 @@
 #!/usr/bin/python3
-# Interactively edit EFM filter parameters and view the results.
+"""
+Interactively edit EFM filter parameters and view the results.
+
+The FFT-based equaliser was inspired by the input signal equaliser in WSJT-X,
+described in Steven J. Franke and Joseph H. Taylor, "The MSK144 Protocol for
+Meteor-Scatter Communication", QEX July/August 2017.
+<http://physics.princeton.edu/pulsar/k1jt/MSK144_Protocol_QEX.pdf>
+"""
 
 # XXX Draw eye diagram, or histogram of zero crossing lengths
 # XXX Run decoder in the background
