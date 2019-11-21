@@ -8,7 +8,6 @@ Meteor-Scatter Communication", QEX July/August 2017.
 <http://physics.princeton.edu/pulsar/k1jt/MSK144_Protocol_QEX.pdf>
 """
 
-# XXX Draw eye diagram, or histogram of zero crossing lengths
 # XXX Run decoder in the background
 
 import concurrent.futures
@@ -41,8 +40,10 @@ class GUI:
 
     def __init__(self, args):
         self.chart_length = 1000
+        self.zc_length = 100000
 
         self.fft = FFTFilter()
+        self.ap_filter = None
 
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
         self.futures = []
@@ -69,9 +70,10 @@ class GUI:
         # matplotlib charts
         figure = matplotlib.figure.Figure()
         figure.set_tight_layout(True)
-        nrows, ncols = 2, 1
+        nrows, ncols = 3, 1
         self.before_ax = figure.add_subplot(nrows, ncols, 1)
         self.after_ax = figure.add_subplot(nrows, ncols, 2)
+        self.zcs_ax = figure.add_subplot(nrows, ncols, 3)
         self.canvas = matplotlib.backends.backend_gtk3cairo.FigureCanvasGTK3Cairo(figure)
         self.canvas.set_size_request(1200 * ncols, 200 * nrows)
         grid.attach(self.canvas, 0, 0, grid_w, 1)
@@ -152,6 +154,20 @@ class GUI:
         self.input_data = self.current_file.data[start:end]
         self.input_range = range(start, end)
 
+        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
+        # Anything above the highest frequency is left as zero.
+        a_values = [w.get_value() for w in self.amp_scales]
+        a_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.amp_scales], kind="cubic")
+        p_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.phase_scales], kind="cubic")
+        self.ap_filter = np.zeros(self.fft.complex_size, dtype=np.complex)
+        for i in range(int(self.freqs[-1] / self.fft.freq_per_bin)):
+            freq = i * self.fft.freq_per_bin
+            a = a_interp(freq)
+            p = p_interp(freq)
+
+            # Scale by the amplitude, rotate by the phase
+            self.ap_filter[i] = a * (np.cos(p) + (complex(0, -1) * np.sin(p)))
+
         # Cancel any already-scheduled background jobs if possible.
         # (This will include any that have already started or completed from
         # the last time we did this, but that's harmless.)
@@ -162,6 +178,7 @@ class GUI:
         # Start calculations in the background
         self.futures.append(self.executor.submit(self.update_before))
         self.futures.append(self.executor.submit(self.update_after))
+        self.futures.append(self.executor.submit(self.update_zc))
 
     def update_before(self):
         # Filter and plot the "before" chart
@@ -169,23 +186,9 @@ class GUI:
         GLib.idle_add(self.plot_chart, self.before_ax, before_data)
 
     def update_after(self):
-        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
-        # Anything above the highest frequency is left as zero.
-        a_values = [w.get_value() for w in self.amp_scales]
-        a_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.amp_scales], kind="cubic")
-        p_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.phase_scales], kind="cubic")
-        ap_filter = np.zeros(self.fft.complex_size, dtype=np.complex)
-        for i in range(int(self.freqs[-1] / self.fft.freq_per_bin)):
-            freq = i * self.fft.freq_per_bin
-            a = a_interp(freq)
-            p = p_interp(freq)
-
-            # Scale by the amplitude, rotate by the phase
-            ap_filter[i] = a * (np.cos(p) + (complex(0, -1) * np.sin(p)))
-
         # Filter and plot the "after" chart
         def freqfunc(comp):
-            comp *= ap_filter
+            comp *= self.ap_filter
         after_data = self.fft.apply(self.input_data, freqfunc)
         GLib.idle_add(self.plot_chart, self.after_ax, after_data)
 
@@ -198,6 +201,39 @@ class GUI:
 
         # Tweak appearance
         ax.grid(True)
+
+        self.canvas.draw()
+
+    def update_zc(self):
+        # Filter the start of the data
+        def freqfunc(comp):
+            comp *= self.ap_filter
+        zc_data = self.fft.apply(self.current_file.data[:self.zc_length], freqfunc)
+
+        # Find locations of zero crossings.
+        # XXX This may need hysteresis as in ld-ldstoefm?
+        slice0 = zc_data[:-1]
+        slice1 = zc_data[1:]
+        slice0s = slice0 >= 0
+        slice1s = slice1 >= 0
+        crossings = np.nonzero(np.logical_xor(slice0s, slice1s))
+
+        # At each crossing, linearly interpolate where the crossing occurred between the two samples
+        slice0v = slice0[crossings]
+        slice1v = slice1[crossings]
+        # This can't divide by zero because the two must have different signs!
+        crossings = crossings[0] + ((-slice0v) / (slice1v - slice0v))
+
+        # Find the spacings between crossings
+        spacings = crossings[1:] - crossings[:-1]
+
+        GLib.idle_add(self.plot_zcs, spacings)
+
+    def plot_zcs(self, spacings):
+        """Idle callback to update the zero crossings chart."""
+
+        self.zcs_ax.clear()
+        self.zcs_ax.hist(spacings, bins=100, range=(20, 120))
 
         self.canvas.draw()
 
