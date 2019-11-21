@@ -94,13 +94,19 @@ class GUI:
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
 
-        # Amplitude equaliser widgets
+        # Initial values.
+        # These aren't optimal, but they're a reasonable starting point...
         self.freqs = np.linspace(0.0e6, 2.0e6, num=11)
+        init_amp = np.sin(np.pi * self.freqs / 2.0e6)
+        init_phase = -1.2 * np.ones(len(self.freqs))
+        init_phase[:4] = [0.0, -1.0, -1.1, -1.1]
+
+        # Amplitude equaliser widgets
         self.amp_scales = []
-        for freq in self.freqs:
+        for i, freq in enumerate(self.freqs):
             scale = add_scale("Amplitude %.1f MHz" % (freq / 1.0e6))
             scale.set_range(0.0, 1.5)
-            scale.set_value(1.0)
+            scale.set_value(init_amp[i])
             scale.set_round_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.amp_scales.append(scale)
@@ -110,10 +116,10 @@ class GUI:
 
         # Phase equaliser widgets
         self.phase_scales = []
-        for freq in self.freqs:
+        for i, freq in enumerate(self.freqs):
             scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
             scale.set_range(-np.pi, np.pi)
-            scale.set_value(0.0)
+            scale.set_value(init_phase[i])
             scale.set_round_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.phase_scales.append(scale)
