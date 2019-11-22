@@ -84,3 +84,14 @@ class FFTFilter:
             output[left:right] += fft_real[left - orig_left:right - orig_left]
 
         return output
+
+if __name__ == "__main__":
+    # Test with various sizes of data to ensure blocking works properly
+    fft = FFTFilter()
+    for size in (0, 1, 1000, fft.real_size - 1, fft.real_size, fft.real_size + 1, 500000):
+        print("Testing FFTFilter.apply, size", size)
+        input_data = np.linspace(-12345, 12345, size)
+        def doublefunc(comp):
+            comp *= 2
+        output_data = fft.apply(input_data, doublefunc)
+        assert np.all(np.abs((input_data * 2) - output_data) < 1e-6)
