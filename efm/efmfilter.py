@@ -3,6 +3,7 @@
 
 import numpy as np
 import pyfftw
+import scipy.interpolate as spi
 import scipy.signal as sps
 
 SAMPLE_RATE = 40e6
@@ -156,6 +157,48 @@ class FFTFilter:
         assert output_pos[0] == len(input_data)
         return output_data
 
+class EFMEqualiser:
+    """Frequency-domain equalisation filter for the LaserDisc EFM signal.
+
+    This was inspired by the input signal equaliser in WSJT-X, described in
+    Steven J. Franke and Joseph H. Taylor, "The MSK144 Protocol for
+    Meteor-Scatter Communication", QEX July/August 2017.
+    <http://physics.princeton.edu/pulsar/k1jt/MSK144_Protocol_QEX.pdf>
+    """
+
+    def __init__(self):
+        # Frequency bands
+        self.freqs = np.linspace(0.0e6, 2.0e6, num=11)
+
+        # Amplitude and phase adjustments for each band.
+        # The initial values aren't optimal, but they're a reasonable starting point...
+        self.amp = np.sin(np.pi * self.freqs / 2.0e6)
+        self.phase = -1.2 * np.ones(len(self.freqs))
+        self.phase[:4] = [0.0, -1.0, -1.1, -1.1]
+
+        self.coeffs = None
+
+    def compute(self, fft):
+        """Compute filter coefficients for the given FFTFilter."""
+
+        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
+        # Anything above the highest frequency is left as zero.
+        a_interp = spi.interp1d(self.freqs, self.amp, kind="cubic")
+        p_interp = spi.interp1d(self.freqs, self.phase, kind="cubic")
+        self.coeffs = np.zeros(fft.complex_size, dtype=np.complex)
+        for i in range(int(self.freqs[-1] / fft.freq_per_bin)):
+            freq = i * fft.freq_per_bin
+            a = a_interp(freq)
+            p = p_interp(freq)
+
+            # Scale by the amplitude, rotate by the phase
+            self.coeffs[i] = a * (np.cos(p) + (complex(0, -1) * np.sin(p)))
+
+    def filter(self, comp):
+        """Frequency-domain filter function to use with FFTFilter."""
+
+        comp *= self.coeffs
+
 def zero_crossings(data):
     """Given a numpy array of values, return the positions of zero crossings
     within the array. Crossing positions are linearly interpolated between
@@ -174,8 +217,8 @@ def zero_crossings(data):
     return crossings[0] + ((-before) / (after - before))
 
 if __name__ == "__main__":
-    def check_nearly_equal(a, b):
-        assert np.all(np.abs(a - b) < 1e-6)
+    def check_nearly_equal(a, b, epsilon=1e-6):
+        assert np.all(np.abs(a - b) < epsilon)
 
     # Test FFTFilter with various sizes of data to ensure blocking works properly
     fft = FFTFilter()
@@ -186,6 +229,21 @@ if __name__ == "__main__":
             comp *= 2
         output_data = fft.apply(input_data, doublefunc)
         check_nearly_equal(input_data * 2, output_data)
+
+    eq = EFMEqualiser()
+    for gain in (0, 1, 2):
+        print("Testing EFMEqualiser, gain", gain)
+
+        eq.amp[:] = gain
+        eq.phase[:] = 0
+        eq.compute(fft)
+
+        # This has to be a low-frequency signal (and an approximate match)
+        # because EFMEqualiser is still doing an LPF above the top frequency
+        # band...
+        input_data = np.sin(np.linspace(0, 4 * np.pi, 5000))
+        output_data = fft.apply(input_data, eq.filter)
+        check_nearly_equal(input_data * gain, output_data, 0.1)
 
     print("Testing zero_crossings")
     crossings = zero_crossings(np.array([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -3.0, -3.0]))

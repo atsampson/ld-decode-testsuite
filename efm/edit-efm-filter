@@ -1,12 +1,5 @@
 #!/usr/bin/python3
-"""
-Interactively edit EFM filter parameters and view the results.
-
-The FFT-based equaliser was inspired by the input signal equaliser in WSJT-X,
-described in Steven J. Franke and Joseph H. Taylor, "The MSK144 Protocol for
-Meteor-Scatter Communication", QEX July/August 2017.
-<http://physics.princeton.edu/pulsar/k1jt/MSK144_Protocol_QEX.pdf>
-"""
+# Interactively edit EFM filter parameters and view the results.
 
 # XXX Pulldown/list to select which file you're looking at
 # XXX Run decoder in the background
@@ -17,14 +10,13 @@ import matplotlib.backends.backend_gtk3cairo
 import matplotlib.figure
 import numpy as np
 import os
-import scipy.interpolate as spi
 import scipy.signal as sps
 import sys
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
-from efmfilter import SAMPLE_RATE, FFTFilter, zero_crossings
+from efmfilter import SAMPLE_RATE, FFTFilter, EFMEqualiser, zero_crossings
 
 class InputFile:
     """A .s16 RF sample that can be decoded."""
@@ -44,7 +36,7 @@ class GUI:
         self.zc_length = 100000
 
         self.fft = FFTFilter()
-        self.ap_filter = None
+        self.eq = EFMEqualiser()
 
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
         self.futures = []
@@ -97,19 +89,12 @@ class GUI:
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
 
-        # Initial values.
-        # These aren't optimal, but they're a reasonable starting point...
-        self.freqs = np.linspace(0.0e6, 2.0e6, num=11)
-        init_amp = np.sin(np.pi * self.freqs / 2.0e6)
-        init_phase = -1.2 * np.ones(len(self.freqs))
-        init_phase[:4] = [0.0, -1.0, -1.1, -1.1]
-
         # Amplitude equaliser widgets
         self.amp_scales = []
-        for i, freq in enumerate(self.freqs):
+        for i, freq in enumerate(self.eq.freqs):
             scale = add_scale("Amplitude %.1f MHz" % (freq / 1.0e6))
             scale.set_range(0.0, 1.5)
-            scale.set_value(init_amp[i])
+            scale.set_value(self.eq.amp[i])
             scale.set_round_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.amp_scales.append(scale)
@@ -119,10 +104,10 @@ class GUI:
 
         # Phase equaliser widgets
         self.phase_scales = []
-        for i, freq in enumerate(self.freqs):
+        for i, freq in enumerate(self.eq.freqs):
             scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
             scale.set_range(-np.pi, np.pi)
-            scale.set_value(init_phase[i])
+            scale.set_value(self.eq.phase[i])
             scale.set_round_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.phase_scales.append(scale)
@@ -155,19 +140,10 @@ class GUI:
         self.input_data = self.current_file.data[start:end]
         self.input_range = range(start, end)
 
-        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
-        # Anything above the highest frequency is left as zero.
-        a_values = [w.get_value() for w in self.amp_scales]
-        a_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.amp_scales], kind="cubic")
-        p_interp = spi.interp1d(self.freqs, [w.get_value() for w in self.phase_scales], kind="cubic")
-        self.ap_filter = np.zeros(self.fft.complex_size, dtype=np.complex)
-        for i in range(int(self.freqs[-1] / self.fft.freq_per_bin)):
-            freq = i * self.fft.freq_per_bin
-            a = a_interp(freq)
-            p = p_interp(freq)
-
-            # Scale by the amplitude, rotate by the phase
-            self.ap_filter[i] = a * (np.cos(p) + (complex(0, -1) * np.sin(p)))
+        # Compute the filter
+        self.eq.amp[:] = [w.get_value() for w in self.amp_scales]
+        self.eq.phase[:] = [w.get_value() for w in self.phase_scales]
+        self.eq.compute(self.fft)
 
         # Cancel any already-scheduled background jobs if possible.
         # (This will include any that have already started or completed from
@@ -188,9 +164,7 @@ class GUI:
 
     def update_after(self):
         # Filter and plot the "after" chart
-        def freqfunc(comp):
-            comp *= self.ap_filter
-        after_data = self.fft.apply(self.input_data, freqfunc)
+        after_data = self.fft.apply(self.input_data, self.eq.filter)
         GLib.idle_add(self.plot_chart, self.after_ax, after_data, "Equalised signal")
 
     def plot_chart(self, ax, y_data, title):
@@ -208,11 +182,9 @@ class GUI:
 
     def update_zc(self):
         # Filter the input data from the selected position
-        def freqfunc(comp):
-            comp *= self.ap_filter
         start = self.current_file.offset
         end = min(start + self.zc_length, len(self.current_file.data))
-        zc_data = self.fft.apply(self.current_file.data[start:end], freqfunc)
+        zc_data = self.fft.apply(self.current_file.data[start:end], self.eq.filter)
 
         # Find the spacings between crossings
         crossings = zero_crossings(zc_data)
