@@ -171,10 +171,9 @@ class EFMEqualiser:
         self.freqs = np.linspace(0.0e6, 2.0e6, num=11)
 
         # Amplitude and phase adjustments for each band.
-        # The initial values aren't optimal, but they're a reasonable starting point...
-        self.amp = np.sin(np.pi * self.freqs / 2.0e6)
-        self.phase = -1.2 * np.ones(len(self.freqs))
-        self.phase[:4] = [0.0, -1.0, -1.1, -1.1]
+        # These values were adjusted empirically based on a selection of NTSC and PAL samples.
+        self.amp = np.array([0.0, 0.2, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0])
+        self.phase = np.array([0.0, -0.95, -1.05, -1.05, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2])
 
         self.coeffs = None
 
