@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+# Apply the EFM filter to .s16 samples from stdin, with output to stdout.
+#
+# Example use:
+#   ld-lds-converter -i disc.lds | efm-filter | ld-ldstoefm digi.efm
+#   ld-process-efm digi.efm
+
+import numpy as np
+import sys
+
+from efmfilter import FFTFilter, EFMEqualiser
+
+def read(size):
+    s = sys.stdin.buffer.read(size * 2)
+    return np.frombuffer(s, np.int16)
+
+def write(data):
+    sys.stdout.buffer.write(data.astype(np.int16).tobytes())
+
+def main():
+    fft = FFTFilter()
+
+    # Use the equaliser's default settings
+    eq = EFMEqualiser()
+    eq.compute(fft)
+
+    fft.process(read, write, eq.filter)
+
+if __name__ == "__main__":
+    main()
