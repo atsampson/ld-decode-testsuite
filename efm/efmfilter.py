@@ -27,43 +27,75 @@ class FFTFilter:
         # Symmetric window for the FFT, so we can just add output blocks together
         self.forward_window = sps.windows.hann(self.real_size, sym=False)
 
-    def apply(self, data, freqfunc):
-        """Transform data into the frequency domain using the FFT, apply
-        freqfunc to it, then transform it back to the time domain and return
-        the result.
+    def process(self, readfunc, writefunc, freqfunc):
+        """Process a stream of data through a frequency-domain filter. This
+        takes three callback functions:
 
-        freqfunc's argument is a PyFFTW array of size complex_size, which it
-        should modify in place."""
+        readfunc(size) -> data
+          Read exactly size samples from the input, returning a numpy array.
+          At the end of the file, return a short (or 0-length) array.
+
+        writefunc(data)
+          Write a numpy array of samples to the output.
+
+        freqfunc(comp)
+          Perform the frequency-domain filter in place on a numpy array of
+          complex FFT bins. The bins correspond to frequencies
+          0 ... sample_rate/2 (i.e. freq_per_bin Hz in each bin)."""
 
         # Aligned buffers for FFT input/output
         fft_real = pyfftw.empty_aligned(self.real_size, np.float64)
         fft_complex = pyfftw.empty_aligned(self.complex_size, np.complex128)
 
         # Plan the forward and inverse FFTs.
-        # (This will be expensive the first time only.)
+        # (This will be expensive the first time but cheap for repeated calls,
+        # because PyFFTW caches the plans.)
         forward_fft = pyfftw.FFTW(fft_real, fft_complex)
-        inverse_fft = pyfftw.FFTW(fft_complex, fft_real,
-                                       direction='FFTW_BACKWARD')
+        inverse_fft = pyfftw.FFTW(fft_complex, fft_real, direction='FFTW_BACKWARD')
 
-        # Work through the input data in half_size blocks.
-        # We must overlap by half a block at each end.
-        length = len(data)
-        output = np.zeros(length, np.float64)
-        prev_block = np.zeros(self.half_size, np.int16)
-        for pos in range(0, length + self.half_size, self.half_size):
-            # Copy data from the input, padding with zeroes
-            right = min(length, pos + self.half_size)
-            if (right - pos) == self.half_size:
-                block = data[pos:right]
+        # We work through the input in blocks of half_size samples, padding at
+        # both ends with zeros.
+        #
+        # So the input:
+        #         aaa bbb ccc dd
+        #
+        # will be processed as:
+        #     000 aaa
+        #         aaa bbb
+        #             bbb ccc
+        #                 ccc dd0
+        #                     dd0 000
+
+        first_block = True
+        prev_input = np.zeros(self.half_size, np.float64)
+        prev_input_len = self.half_size
+        prev_output = np.zeros(self.half_size, np.float64)
+        while True:
+            # The left half of the FFT input is the right half from last time
+            fft_real[:self.half_size] = prev_input
+
+            if prev_input_len == 0:
+                # Optimisation: the last read returned 0 samples (so the total
+                # length of the data was a multiple of the FFT size). We
+                # wouldn't produce any output from this final FFT so we can
+                # stop now.
+                break
+            elif prev_input_len < self.half_size:
+                # We read (and padded) a partial input block last time, so this
+                # will be our last output
+                input_len = 0
+                fft_real[self.half_size:] = 0.0
             else:
-                block_right = max(0, right - pos)
-                block = np.zeros(self.half_size, np.int16)
-                block[:block_right] = data[pos:right]
+                # Read the next half_size samples
+                input_data = readfunc(self.half_size)
+                input_len = len(input_data)
+                fft_real[self.half_size:self.half_size + input_len] = input_data
 
-            # Make up the FFT's input
-            fft_real[:self.half_size] = prev_block
-            fft_real[self.half_size:] = block
-            prev_block = block
+                if input_len < self.half_size:
+                    # Last partial input block -- pad with zeros
+                    fft_real[self.half_size + input_len:] = 0.0
+
+                prev_input[:] = fft_real[self.half_size:]
 
             # Apply the window function and do the FFT.
             # This is a real-to-complex FFT so the result has frequencies 0 to
@@ -77,13 +109,52 @@ class FFTFilter:
             # Do the inverse FFT
             inverse_fft()
 
-            # Merge the inverse FFT output into the output buffer
-            orig_left = pos - self.half_size
-            left = max(0, orig_left)
-            right = min(length, pos + self.half_size)
-            output[left:right] += fft_real[left - orig_left:right - orig_left]
+            if first_block:
+                # The first output block is padding; discard it
+                first_block = False
+            else:
+                # Add the right half of the previous FFT result to the left
+                # half of this one, giving us an output block
+                fft_real[:self.half_size] += prev_output
 
-        return output
+                # Write it, trimmed to the length of the corresponding input
+                # from last time
+                writefunc(fft_real[:prev_input_len])
+                if prev_input_len < self.half_size:
+                    # And that's the end of the input, so we can stop
+                    break
+
+            prev_input_len = input_len
+            prev_output[:] = fft_real[self.half_size:]
+
+    def apply(self, input_data, freqfunc, dtype=np.float64):
+        """Process a numpy array through a frequency-domain filter, returning a
+        new numpy array of results of type dtype.
+
+        freqfunc(comp)
+          Perform the frequency-domain filter in place on a numpy array of
+          complex FFT bins. The bins correspond to frequencies
+          0 ... sample_rate/2 (i.e. freq_per_bin Hz in each bin)."""
+
+        input_pos = [0]
+        def readfunc(size):
+            end = min(input_pos[0] + size, len(input_data))
+            data = input_data[input_pos[0]:end]
+            input_pos[0] = end
+            return data
+
+        output_data = np.zeros(len(input_data), dtype)
+        output_pos = [0]
+        def writefunc(data):
+            end = output_pos[0] + len(data)
+            output_data[output_pos[0]:end] = data
+            output_pos[0] = end
+
+        self.process(readfunc, writefunc, freqfunc)
+
+        assert input_pos[0] == len(input_data)
+        assert output_pos[0] == len(input_data)
+        return output_data
 
 if __name__ == "__main__":
     # Test with various sizes of data to ensure blocking works properly
