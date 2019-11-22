@@ -95,7 +95,7 @@ class GUI:
             scale = add_scale("Amplitude %.1f MHz" % (freq / 1.0e6))
             scale.set_range(0.0, 1.5)
             scale.set_value(self.eq.amp[i])
-            scale.set_round_digits(2)
+            scale.set_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.amp_scales.append(scale)
 
@@ -108,7 +108,7 @@ class GUI:
             scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
             scale.set_range(-np.pi, np.pi)
             scale.set_value(self.eq.phase[i])
-            scale.set_round_digits(2)
+            scale.set_digits(2)
             scale.connect("value-changed", self.eq_changed)
             self.phase_scales.append(scale)
 
