@@ -143,6 +143,7 @@ class GUI:
         # Compute the filter
         self.eq.amp[:] = [w.get_value() for w in self.amp_scales]
         self.eq.phase[:] = [w.get_value() for w in self.phase_scales]
+        print("amp=", self.eq.amp, "phase=", self.eq.phase)
         self.eq.compute(self.fft)
 
         # Cancel any already-scheduled background jobs if possible.
