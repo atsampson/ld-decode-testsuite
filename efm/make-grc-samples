@@ -17,7 +17,6 @@ length=$(expr 30 \* $rate \* 2)
 if false; then
 # PAL, C1 error rate 6%
 ld-ldf-reader $ldsdir/FawltyTowersS2_CAV_PAL_side1_4400_2019-10-11_22-38-55.raw.oga $start | head -c $length >$outdir/fawlty.s16
-fi
 
 # PAL, C1 error rate 15%
 ld-ldf-reader $ldsdir/MessageToLove_CLV_PAL_side2_4400_2019-08-25_17-51-18.raw.oga $start | head -c $length >$outdir/wight.s16
@@ -39,3 +38,13 @@ ld-ldf-reader $ldsdir/ThisIsSpinalTap_CLV_NTSC_side1_4400_2019-09-17_19-04-03.ra
 
 # NTSC, C1 error rate 99%
 ld-ldf-reader $ldsdir/Squibnocket_CLV_NTSC_side2_4400_2019-10-02_22-13-34.raw.oga $start | head -c $length >$outdir/squibnocket.s16
+fi
+
+# Samples at varying locations
+for loc in 01 02 03 04 05 09 13 20 30 40 50 55; do
+	start=$(expr $loc \* 60 \* $rate)
+	length=$(expr 10 \* $rate \* 2)
+
+	ld-ldf-reader $ldsdir/ThisIsSpinalTap_CLV_NTSC_side1_4400_2019-09-17_19-04-03.raw.oga $start | head -c $length >$outdir/spinaltap${loc}.s16
+	ld-ldf-reader $ldsdir/Squibnocket_CLV_NTSC_side2_4400_2019-10-02_22-13-34.raw.oga $start | head -c $length >$outdir/squibnocket${loc}.s16
+done
