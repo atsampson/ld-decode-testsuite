@@ -8,6 +8,7 @@ Meteor-Scatter Communication", QEX July/August 2017.
 <http://physics.princeton.edu/pulsar/k1jt/MSK144_Protocol_QEX.pdf>
 """
 
+# XXX Pulldown/list to select which file you're looking at
 # XXX Run decoder in the background
 
 import concurrent.futures
