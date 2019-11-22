@@ -24,6 +24,9 @@ class FFTFilter:
         self.sample_rate = sample_rate
         self.freq_per_bin = (self.sample_rate / 2) / self.complex_size
 
+        # Symmetric window for the FFT, so we can just add output blocks together
+        self.forward_window = sps.windows.hann(self.real_size, sym=False)
+
     def apply(self, data, freqfunc):
         """Transform data into the frequency domain using the FFT, apply
         freqfunc to it, then transform it back to the time domain and return
@@ -41,9 +44,6 @@ class FFTFilter:
         forward_fft = pyfftw.FFTW(fft_real, fft_complex)
         inverse_fft = pyfftw.FFTW(fft_complex, fft_real,
                                        direction='FFTW_BACKWARD')
-
-        # Symmetric window for the FFT, so we can just add output blocks together
-        forward_window = sps.windows.hann(self.real_size, sym=False)
 
         # Work through the input data in half_size blocks.
         # We must overlap by half a block at each end.
@@ -68,7 +68,7 @@ class FFTFilter:
             # Apply the window function and do the FFT.
             # This is a real-to-complex FFT so the result has frequencies 0 to
             # SAMPLE_RATE / 2.
-            fft_real *= forward_window
+            fft_real *= self.forward_window
             forward_fft()
 
             # Apply the frequency-domain filter
