@@ -156,8 +156,30 @@ class FFTFilter:
         assert output_pos[0] == len(input_data)
         return output_data
 
+def zero_crossings(data):
+    """Given a numpy array of values, return the positions of zero crossings
+    within the array. Crossing positions are linearly interpolated between
+    samples."""
+
+    # Find locations of crossings
+    # XXX This may need hysteresis as in ld-ldstoefm?
+    slice0 = data[:-1]
+    slice1 = data[1:]
+    slice0s = slice0 >= 0
+    slice1s = slice1 >= 0
+    crossings = np.nonzero(np.logical_xor(slice0s, slice1s))
+
+    # At each crossing, linearly interpolate where the crossing occurred between the two samples
+    slice0v = slice0[crossings]
+    slice1v = slice1[crossings]
+    # This can't divide by zero because the two must have different signs!
+    return crossings[0] + ((-slice0v) / (slice1v - slice0v))
+
 if __name__ == "__main__":
-    # Test with various sizes of data to ensure blocking works properly
+    def check_nearly_equal(a, b):
+        assert np.all(np.abs(a - b) < 1e-6)
+
+    # Test FFTFilter with various sizes of data to ensure blocking works properly
     fft = FFTFilter()
     for size in (0, 1, 1000, fft.real_size - 1, fft.real_size, fft.real_size + 1, 500000):
         print("Testing FFTFilter.apply, size", size)
@@ -165,4 +187,8 @@ if __name__ == "__main__":
         def doublefunc(comp):
             comp *= 2
         output_data = fft.apply(input_data, doublefunc)
-        assert np.all(np.abs((input_data * 2) - output_data) < 1e-6)
+        check_nearly_equal(input_data * 2, output_data)
+
+    print("Testing zero_crossings")
+    crossings = zero_crossings(np.array([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -3.0, -3.0]))
+    check_nearly_equal(crossings, [2.5, 5.5, 8.25])
