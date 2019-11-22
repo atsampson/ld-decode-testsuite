@@ -161,19 +161,17 @@ def zero_crossings(data):
     within the array. Crossing positions are linearly interpolated between
     samples."""
 
-    # Find locations of crossings
+    # Find locations of crossings: XOR the sign of each sample with the
+    # following sample's sign; it'll be 1 if they were different
     # XXX This may need hysteresis as in ld-ldstoefm?
-    slice0 = data[:-1]
-    slice1 = data[1:]
-    slice0s = slice0 >= 0
-    slice1s = slice1 >= 0
-    crossings = np.nonzero(np.logical_xor(slice0s, slice1s))
+    signs = data >= 0
+    crossings = np.nonzero(np.logical_xor(signs[:-1], signs[1:]))
 
     # At each crossing, linearly interpolate where the crossing occurred between the two samples
-    slice0v = slice0[crossings]
-    slice1v = slice1[crossings]
+    before = data[:-1][crossings]
+    after = data[1:][crossings]
     # This can't divide by zero because the two must have different signs!
-    return crossings[0] + ((-slice0v) / (slice1v - slice0v))
+    return crossings[0] + ((-before) / (after - before))
 
 if __name__ == "__main__":
     def check_nearly_equal(a, b):
