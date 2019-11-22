@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 # Interactively edit EFM filter parameters and view the results.
 
-# XXX Pulldown/list to select which file you're looking at
 # XXX Run decoder in the background
 
 import concurrent.futures
@@ -22,7 +21,7 @@ class InputFile:
     """A .s16 RF sample that can be decoded."""
 
     def __init__(self, filename):
-        self.filename = filename
+        self.filename = os.path.basename(filename)
         # mmap the file to avoid loading it all into memory
         self.data = np.memmap(filename=filename, dtype=np.int16, mode="r")
 
@@ -85,6 +84,16 @@ class GUI:
             row_count[0] += 1
             return scale
 
+        # File selection widget
+        label = Gtk.Label.new("File")
+        grid.attach(label, col + 2, row_count[0], 1, 1)
+        selector = Gtk.ComboBoxText()
+        for ifile in self.files:
+            selector.append(None, ifile.filename)
+        selector.set_active(0)
+        selector.connect("changed", self.file_changed)
+        grid.attach(selector, col + 3, row_count[0], 1, 1)
+
         # Chart navigation widgets
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
@@ -119,6 +128,11 @@ class GUI:
 
     def offset_changed(self, widget, user_data=None):
         self.current_file.offset = int(widget.get_value())
+        self.update_filter()
+
+    def file_changed(self, widget, user_data=None):
+        self.current_file = self.files[int(widget.get_active())]
+        self.update_file()
         self.update_filter()
 
     def eq_changed(self, widget, user_data=None):
