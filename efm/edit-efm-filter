@@ -215,6 +215,8 @@ class GUI:
 
         self.zcs_ax.clear()
         self.zcs_ax.hist(spacings, bins=200, range=(2 * t_size, 12 * t_size))
+        # XXX This should be computed from zc_length
+        self.zcs_ax.set_ylim(top=150)
 
         self.zcs_ax.set_title("Zero-crossing spacings")
 
