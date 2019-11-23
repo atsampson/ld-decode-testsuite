@@ -15,7 +15,7 @@ import sys
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
-from efmfilter import SAMPLE_RATE, FFTFilter, EFMEqualiser, zero_crossings
+from efmfilter import SAMPLE_RATE, EFM_RATE, FFTFilter, EFMEqualiser, zero_crossings
 
 class InputFile:
     """A .s16 RF sample that can be decoded."""
@@ -211,7 +211,7 @@ class GUI:
         """Idle callback to update the zero crossings chart."""
 
         # We should see spacings from 3 to 11 multiples of this...
-        t_size = SAMPLE_RATE / 4321800.0
+        t_size = SAMPLE_RATE / EFM_RATE
 
         self.zcs_ax.clear()
         self.zcs_ax.hist(spacings, bins=200, range=(2 * t_size, 12 * t_size))

@@ -7,6 +7,7 @@ import scipy.interpolate as spi
 import scipy.signal as sps
 
 SAMPLE_RATE = 40e6
+EFM_RATE = 4321800.0
 
 class FFTFilter:
     """A generic FFT-based filter."""
