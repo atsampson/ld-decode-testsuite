@@ -181,18 +181,19 @@ class EFMEqualiser:
     def compute(self, fft):
         """Compute filter coefficients for the given FFTFilter."""
 
-        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
         # Anything above the highest frequency is left as zero.
+        self.coeffs = np.zeros(fft.complex_size, dtype=np.complex)
+
+        # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
         a_interp = spi.interp1d(self.freqs, self.amp, kind="cubic")
         p_interp = spi.interp1d(self.freqs, self.phase, kind="cubic")
-        self.coeffs = np.zeros(fft.complex_size, dtype=np.complex)
-        for i in range(int(self.freqs[-1] / fft.freq_per_bin) + 1):
-            freq = i * fft.freq_per_bin
-            a = a_interp(freq)
-            p = p_interp(freq)
+        nonzero_bins = int(self.freqs[-1] / fft.freq_per_bin) + 1
+        bin_freqs = np.arange(nonzero_bins) * fft.freq_per_bin
+        bin_amp = a_interp(bin_freqs)
+        bin_phase = p_interp(bin_freqs)
 
-            # Scale by the amplitude, rotate by the phase
-            self.coeffs[i] = a * (np.cos(p) + (complex(0, -1) * np.sin(p)))
+        # Scale by the amplitude, rotate by the phase
+        self.coeffs[:nonzero_bins] = bin_amp * (np.cos(bin_phase) + (complex(0, -1) * np.sin(bin_phase)))
 
     def filter(self, comp):
         """Frequency-domain filter function to use with FFTFilter."""
