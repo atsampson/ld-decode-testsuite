@@ -186,7 +186,7 @@ class EFMEqualiser:
         a_interp = spi.interp1d(self.freqs, self.amp, kind="cubic")
         p_interp = spi.interp1d(self.freqs, self.phase, kind="cubic")
         self.coeffs = np.zeros(fft.complex_size, dtype=np.complex)
-        for i in range(int(self.freqs[-1] / fft.freq_per_bin)):
+        for i in range(int(self.freqs[-1] / fft.freq_per_bin) + 1):
             freq = i * fft.freq_per_bin
             a = a_interp(freq)
             p = p_interp(freq)
