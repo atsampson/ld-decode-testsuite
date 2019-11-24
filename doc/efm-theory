@@ -1,0 +1,47 @@
+# What should the curve theoretically be?
+
+IEC 60856-1986 Amendment 2 says that after encoding, the EFM signal goes through:
+
+- LPF with cutoff frequency 1.75 MHz, giving the amplitude response:
+  < 1.6 MHz      0 +/- 0.5 dB
+  1.75 MHz       -3 +/- 0.5 dB
+  2 MHz          -26 +/- 2 dB
+  > 2.3 MHz      < -50 dB
+  and group delay (to compensate for expected group delay in the player's LPF):
+  < 0.5 MHz      0 +/- 20 nsec
+  0.8 MHz        -50 +/- 20 nsec     -0.25 rad    2*np.pi*0.8e6*-50e-9
+  1 MHz          -100 +/- 50 nsec    -0.62 rad
+  1.2 MHz        -180 +/- 50 nsec    -1.35 rad
+  1.4 MHz        -350 +/- 75 nsec    -3.08 rad
+  It says that the player should use (a simplified version of) the same LPF.
+
+- Pre-emphasis:
+  A = (1 + jwt3) / (1 + jwt2)
+  t2 = 5 +/- 0.1 usec    (i.e.  31830 Hz)    1/(2*np.pi*5e-6)
+  t3 = 318 +/- 6 nsec    (i.e. 500487 Hz)
+  (i.e. a curve dropping at 6dB/octave from t2 to t3 and flat either side)
+
+- HPF:
+  A = jwt1 / (1 + jwt1)
+  t1 = 75 +/- 5 usec     (i.e. 2122 Hz)
+  (i.e. a curve rising at 6dB/octave from 0 Hz to t1 and flat above)
+
+DDD filter specs:
+<https://www.domesday86.com/?page_id=2233#Filter_stage>
+Phase angle is somewhere around -30 degrees in the 0-2 Mhz range.
+
+Some filter values based on the above (with amp in dB):
+
+self.freqs = 1.0e6 * np.array([0.0, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.8, 1.0, 1.2, 1.4, 1.6, 1.75, 2.0], np.float64)
+self.amp = np.array([-60., -27.51, -22.29, -17.27, -12.62, -7.6, -2.96, -0.06, -0.06, 0., -0.06, -0.06, -3.15, -26.], np.float64)
+self.phase = np.array([-0.02, -0.24, -0.74, -1.05, -1.12, -1.12, -1.15, -1.2, -1.2, -1.2, -1.22, -1.2, -1.2, -1.2], np.float64)
+
+self.freqs = np.linspace(0.0e6, 2.1e6, num=22)
+a_interp = spi.interp1d([0.0e6, 0.03e6, 0.5e6, 0.8e6, 1.6e6, 1.8e6, 2.0e6, 2.1e6],
+                        [-60.0, -27.0,  -3.0,  0.0,   0.0,   -3.0,  -26.0, -60.0],
+                        kind="linear")
+# Adding 3dB at low end improves THX-1138.
+self.amp = a_interp(self.freqs)
+self.phase = -1.2 * np.ones(len(self.freqs), np.float64)
+
+This isn't as good as the hand-tweaked 11-band version, though.
