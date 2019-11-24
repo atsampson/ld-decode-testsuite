@@ -98,6 +98,8 @@ class GUI:
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
 
+        row_count[0] += 1
+
         # Amplitude equaliser widgets
         self.amp_scales = []
         for i, freq in enumerate(self.eq.freqs):
@@ -112,6 +114,11 @@ class GUI:
         row_count = [2]
 
         # Phase equaliser widgets
+        self.phase_base_scale = add_scale("Phase base")
+        self.phase_base_scale.set_range(-np.pi, np.pi)
+        self.phase_base_scale.set_value(0)
+        self.phase_base_scale.set_digits(2)
+        self.phase_base_scale.connect("value-changed", self.eq_changed)
         self.phase_scales = []
         for i, freq in enumerate(self.eq.freqs):
             scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
@@ -156,7 +163,7 @@ class GUI:
 
         # Compute the filter
         self.eq.amp[:] = [w.get_value() for w in self.amp_scales]
-        self.eq.phase[:] = [w.get_value() for w in self.phase_scales]
+        self.eq.phase[:] = [w.get_value() + self.phase_base_scale.get_value() for w in self.phase_scales]
         print("amp=", self.eq.amp, "phase=", self.eq.phase)
         self.eq.compute(self.fft)
 
