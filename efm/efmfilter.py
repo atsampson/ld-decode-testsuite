@@ -12,7 +12,7 @@ EFM_RATE = 4321800.0
 class FFTFilter:
     """A generic FFT-based filter."""
 
-    def __init__(self, real_size=1 << 16, sample_rate=SAMPLE_RATE):
+    def __init__(self, real_size=1 << 11, sample_rate=SAMPLE_RATE):
         """Initialise the filter, using blocks of real_size samples."""
 
         # We will apply the FFT to real_size samples at a time, in blocks that
