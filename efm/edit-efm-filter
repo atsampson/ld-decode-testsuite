@@ -15,7 +15,8 @@ import sys
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
-from efmfilter import SAMPLE_RATE, EFM_RATE, FFTFilter, EFMEqualiser, zero_crossings
+from efmdecode import EFM_RATE, zero_crossings
+from efmfilter import SAMPLE_RATE, FFTFilter, EFMEqualiser
 
 class InputFile:
     """A .s16 RF sample that can be decoded."""
