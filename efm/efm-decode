@@ -30,7 +30,6 @@ import sys
 # Attribute types of EFM_PLL for numba.
 EFM_PLL_spec = [
     ("zcPreviousInput", numba.int16),
-    ("prevDirection", numba.boolean),
     ("delta", numba.float64),
 
     ("pllResult", numba.int8[:]),
@@ -54,7 +53,6 @@ class EFM_PLL:
     def __init__(self):
         # ZC detector state
         self.zcPreviousInput = 0
-        self.prevDirection = False # Down
         self.delta = 0.0
 
         # PLL output buffer
@@ -96,14 +94,8 @@ class EFM_PLL:
         for vCurr in inputBuffer:
             vPrev = self.zcPreviousInput
 
-            # Have we seen a zero-crossing, in the opposite direction to the
-            # last one we saw?
-            if ((vPrev < 0 and vCurr >= 0 and (not self.prevDirection))
-                or (vPrev > 0 and vCurr <= 0 and self.prevDirection)):
-
-                # Flip prevDirection
-                self.prevDirection = not self.prevDirection
-
+            # Have we seen a zero-crossing?
+            if (vPrev < 0 and vCurr >= 0) or (vPrev >= 0 and vCurr < 0):
                 # Interpolate to get the ZC sub-sample position fraction
                 prev = float(vPrev)
                 curr = float(vCurr)
