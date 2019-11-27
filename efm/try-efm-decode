@@ -1,0 +1,45 @@
+#!/bin/sh
+# Compare ld-ldstoefm with efm-decode for a bunch of samples.
+
+sampledir=/d/extra/laserdisc/audio
+filtereddir=/d/extra/laserdisc/filtered
+outdir=/d/extra/laserdisc/efmtest
+
+mkdir -p "$filtereddir" "$outdir"
+
+for sample in "$sampledir"/*.s16; do
+	name=$(basename "$sample" .s16)
+	echo
+	echo "=== $name ==="
+	echo
+
+	filtered="$filtereddir/$name.filt.s16"
+	if [ ! -f "$filtered" ]; then
+		echo "Filtering $sample"
+		pv <"$sample" | ./efm-filter >"$filtered"
+	fi
+
+	refefm="$outdir/$name.ref.efm"
+	if [ ! -f "$refefm" ]; then
+		echo "ld-ldstoefm $filtered"
+		pv <"$filtered" | ld-ldstoefm "$refefm"
+	fi
+
+	outefm="$outdir/$name.out.efm"
+	if [ ! -f "$outefm" ]; then
+		echo "efm-decode $filtered"
+		pv <"$filtered" | ./efm-decode >"$outefm"
+	fi
+
+	for version in ref out; do
+		efm="$outdir/$name.$version.efm"
+		log="$outdir/$name.$version.log"
+		if [ ! -f "$log" ]; then
+			echo "ld-process-efm $efm"
+			ld-process-efm -n "$efm" "$outdir/tmp.pcm" 2>&1 | tee "$log"
+			rm -f "$outdir/tmp.pcm"
+		fi
+	done
+
+	diff -u "$outdir/$name.ref.log" "$outdir/$name.out.log"
+done
