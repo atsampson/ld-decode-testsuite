@@ -124,16 +124,6 @@ class EFM_PLL:
 
         return self.pllResult[:self.pllResultCount]
 
-    def pushTValue(self, bit):
-        # If this is a 1, push the T delta
-        if bit:
-            self.pllResult[self.pllResultCount] = self.tCounter
-            self.pllResultCount += 1
-
-            self.tCounter = 1
-        else:
-            self.tCounter += 1
-
     def pushEdge(self, sampleDelta):
         """Called when a ZC happens on a sample number."""
 
@@ -146,7 +136,7 @@ class EFM_PLL:
             # greater than T11
             if (sampleDelta > nextTime or self.tCounter < 3) and not self.tCounter > 10:
                 self.phaseAdjust = 0.0
-                self.pushTValue(0)
+                self.tCounter += 1
             else:
                 edgeDelta = sampleDelta - (nextTime - self.currentPeriod / 2.0)
                 self.phaseAdjust = edgeDelta * 0.005
@@ -166,17 +156,19 @@ class EFM_PLL:
                     self.frequencyHysteresis = 0
 
                 # Update the reference clock?
-                if self.frequencyHysteresis:
-                    if self.frequencyHysteresis < -1.0 or self.frequencyHysteresis > 1.0:
-                        aper = self.periodAdjustBase * edgeDelta / self.currentPeriod
-                        self.currentPeriod += aper
+                if self.frequencyHysteresis < -1.0 or self.frequencyHysteresis > 1.0:
+                    aper = self.periodAdjustBase * edgeDelta / self.currentPeriod
+                    self.currentPeriod += aper
 
-                        if self.currentPeriod < self.minimumPeriod:
-                            self.currentPeriod = self.minimumPeriod
-                        elif self.currentPeriod > self.maximumPeriod:
-                            self.currentPeriod = self.maximumPeriod
+                    if self.currentPeriod < self.minimumPeriod:
+                        self.currentPeriod = self.minimumPeriod
+                    elif self.currentPeriod > self.maximumPeriod:
+                        self.currentPeriod = self.maximumPeriod
 
-                self.pushTValue(1)
+                self.pllResult[self.pllResultCount] = self.tCounter
+                self.pllResultCount += 1
+
+                self.tCounter = 1
 
         # Reset refClockTime ready for the next delta but
         # keep any error to maintain accuracy
