@@ -91,14 +91,12 @@ class EFM_PLL:
         # Clear the PLL result buffer
         self.pllResultCount = 0
 
-        for vCurr in inputBuffer:
-            vPrev = self.zcPreviousInput
+        for curr in inputBuffer:
+            prev = self.zcPreviousInput
 
             # Have we seen a zero-crossing?
-            if (vPrev < 0 and vCurr >= 0) or (vPrev >= 0 and vCurr < 0):
+            if (prev < 0 and curr >= 0) or (prev >= 0 and curr < 0):
                 # Interpolate to get the ZC sub-sample position fraction
-                prev = float(vPrev)
-                curr = float(vCurr)
                 fraction = (-prev) / (curr - prev)
 
                 # Feed the sub-sample accurate result to the PLL
@@ -112,7 +110,7 @@ class EFM_PLL:
                 self.delta += 1.0
 
             # Keep the previous input (so we can work across buffer boundaries)
-            self.zcPreviousInput = vCurr
+            self.zcPreviousInput = curr
 
         return self.pllResult[:self.pllResultCount]
 
