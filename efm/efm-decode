@@ -2,6 +2,7 @@
 #
 # efm.py - LDS sample to EFM data processing
 # Copyright (C) 2019 Simon Inns
+# Copyright (C) 2019 Adam Sampson
 #
 # This file is part of ld-decode.
 #
@@ -95,28 +96,14 @@ class EFM_PLL:
         for vCurr in inputBuffer:
             vPrev = self.zcPreviousInput
 
-            xup = False
-            xdn = False
+            # Have we seen a zero-crossing, in the opposite direction to the
+            # last one we saw?
+            if ((vPrev < 0 and vCurr >= 0 and (not self.prevDirection))
+                or (vPrev > 0 and vCurr <= 0 and self.prevDirection)):
 
-            # Possing zero-cross up or down?
-            if vPrev < 0 and vCurr >= 0:
-                xup = True
-            if vPrev > 0 and vCurr <= 0:
-                xdn = True
+                # Flip prevDirection
+                self.prevDirection = not self.prevDirection
 
-            # Check ZC direction against previous
-            if self.prevDirection and xup:
-                xup = False
-            if (not self.prevDirection) and xdn:
-                xdn = False
-
-            # Store the current direction as the previous
-            if xup:
-                self.prevDirection = True
-            if xdn:
-                self.prevDirection = False
-
-            if xup or xdn:
                 # Interpolate to get the ZC sub-sample position fraction
                 prev = float(vPrev)
                 curr = float(vCurr)
