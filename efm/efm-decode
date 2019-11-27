@@ -126,7 +126,7 @@ class EFM_PLL:
             # Note: the tCounter < 3 check causes an 'edge push' if T is 1 or 2 (which
             # are invalid timing lengths for the NRZI data).  We also 'edge pull' values
             # greater than T11
-            if (sampleDelta > nextTime or self.tCounter < 3) and not self.tCounter > 10:
+            if (sampleDelta > nextTime or self.tCounter < 3) and self.tCounter < 11:
                 self.phaseAdjust = 0.0
                 self.tCounter += 1
             else:
