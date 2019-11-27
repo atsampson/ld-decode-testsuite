@@ -56,7 +56,7 @@ class EFM_PLL:
         self.delta = 0.0
 
         # PLL output buffer
-        self.pllResult = np.empty(1 << 10, np.int8) # XXX how big?
+        self.pllResult = np.empty(1 << 16, np.int8)
         self.pllResultCount = 0
 
         # PLL state
@@ -88,7 +88,9 @@ class EFM_PLL:
         inputBuffer is a numpy.ndarray of np.int16 samples.
         Returns a view into a numpy.ndarray of np.int8 times."""
 
-        # Clear the PLL result buffer
+        # Ensure the PLL result buffer is big enough, and clear it
+        if len(self.pllResult) < len(inputBuffer):
+            self.pllResult = np.empty(len(inputBuffer), np.int8)
         self.pllResultCount = 0
 
         for curr in inputBuffer:
