@@ -99,7 +99,12 @@ class GUI:
         self.offset_scale = add_scale("File offset")
         self.offset_scale.connect("value-changed", self.offset_changed)
 
-        row_count[0] += 1
+        # Zero offset widgets
+        self.zero_scale = add_scale("Zero offset")
+        self.zero_scale.set_range(-1000, 1000)
+        self.zero_scale.set_value(0)
+        self.zero_scale.set_digits(0)
+        self.zero_scale.connect("value-changed", self.eq_changed)
 
         # Amplitude equaliser widgets
         self.amp_scales = []
@@ -210,7 +215,8 @@ class GUI:
         zc_data = self.fft.apply(self.current_file.data[start:end], self.eq.filter)
 
         # Find the spacings between crossings
-        crossings = zero_crossings(zc_data)
+        zero_offset = self.zero_scale.get_value()
+        crossings = zero_crossings(zc_data + zero_offset)
         spacings = crossings[1:] - crossings[:-1]
 
         GLib.idle_add(self.plot_zcs, spacings)
