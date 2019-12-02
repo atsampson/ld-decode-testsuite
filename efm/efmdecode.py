@@ -23,9 +23,6 @@ def zero_crossings(data):
     return crossings[0] + ((-before) / (after - before))
 
 if __name__ == "__main__":
-    def check_nearly_equal(a, b, epsilon=1e-6):
-        assert np.all(np.abs(a - b) < epsilon)
-
     print("Testing zero_crossings")
     crossings = zero_crossings(np.array([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -3.0, -3.0]))
-    check_nearly_equal(crossings, [2.5, 5.5, 8.25])
+    assert np.allclose(crossings, [2.5, 5.5, 8.25])

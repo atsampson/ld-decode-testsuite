@@ -200,9 +200,6 @@ class EFMEqualiser:
         comp *= self.coeffs
 
 if __name__ == "__main__":
-    def check_nearly_equal(a, b, epsilon=1e-6):
-        assert np.all(np.abs(a - b) < epsilon)
-
     # Test FFTFilter with various sizes of data to ensure blocking works properly
     fft = FFTFilter()
     for size in (0, 1, 1000, fft.real_size - 1, fft.real_size, fft.real_size + 1, 500000):
@@ -211,7 +208,7 @@ if __name__ == "__main__":
         def doublefunc(comp):
             comp *= 2
         output_data = fft.apply(input_data, doublefunc)
-        check_nearly_equal(input_data * 2, output_data)
+        assert np.allclose(input_data * 2, output_data)
 
     eq = EFMEqualiser()
     for gain in (0, 1, 2):
@@ -226,4 +223,4 @@ if __name__ == "__main__":
         # band...
         input_data = np.sin(np.linspace(0, 4 * np.pi, 5000))
         output_data = fft.apply(input_data, eq.filter)
-        check_nearly_equal(input_data * gain, output_data, 0.1)
+        assert np.allclose(input_data * gain, output_data, atol=0.1)
