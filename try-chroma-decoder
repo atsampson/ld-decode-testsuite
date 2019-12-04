@@ -337,6 +337,29 @@ decode () {
 	fi
 }
 
+# Decode with dropout correction.
+doc_decode () {
+	testname="$1"
+	system="$2"
+	lds="$3"
+	shift 3
+
+	case "$testname" in
+	*-off)
+		docargs=""
+		;;
+	*-on)
+		docargs="--doc --doc--overcorrect"
+		;;
+	*)
+		echo >&2 "Unknown doc mode in $testname"
+		exit 1
+		;;
+	esac
+
+	decode "$system" "$lds" $docargs "$@"
+}
+
 # Capture timings.
 benchmark () {
 	system="$1"
@@ -459,8 +482,10 @@ all_tests="\
 	pr-magenta pr-window pr-cross pr-dot pr-black0 pr-sweep pr-ramp pr-yramp \
 	pr-motion2 pr-motion4 pr-motion25 pr-motion54 pr-motion77 pr-motion88 pr-motion122 \
 	pr-motion123 pr-motion145 pr-motion155 \
-	doc-kagemusha-off doc-kagemusha-on doc-un-off doc-un-on doc-aspen-off doc-aspen-on \
 	"
+for doctest in kagemusha un aspen; do
+	all_tests="$all_tests doc-$doctest-off doc-$doctest-on"
+done
 if $videofiles; then
 	all_tests="$all_tests nr-motion pr-motion"
 fi
@@ -743,32 +768,20 @@ run_test () {
 		;;
 
 	# Dropout correction
-	doc-kagemusha-off)
-		decode pal "$ATSDATA/Kagemusha_CLV_PAL_side1_4400_2019-08-26_16-50-27.raw.oga" --ldd-s3786 --ldd-l16 \
+	doc-kagemusha-*)
+		doc_decode "$testname" \
+			pal "$ATSDATA/Kagemusha_CLV_PAL_side1_4400_2019-08-26_16-50-27.raw.oga" --ldd-s3786 --ldd-l16 \
 			--decoder transform3d
 		;;
-	doc-kagemusha-on)
-		decode pal "$ATSDATA/Kagemusha_CLV_PAL_side1_4400_2019-08-26_16-50-27.raw.oga" --ldd-s3786 --ldd-l16 \
-			--doc --doc--overcorrect \
-			--decoder transform3d
-		;;
-	doc-un-off)
-		decode pal "$ATSDATA/Simon/The World the UN and You_CAV_PAL_Disc1_2019-09-15_18-27-44.raw.oga" \
+	doc-un-*)
+		doc_decode "$testname" \
+			pal "$ATSDATA/Simon/The World the UN and You_CAV_PAL_Disc1_2019-09-15_18-27-44.raw.oga" \
 			--ldd-s1000 --ldd-S470 --ldd-l16 --stillframe 6 \
 			--decoder transform3d
 		;;
-	doc-un-on)
-		decode pal "$ATSDATA/Simon/The World the UN and You_CAV_PAL_Disc1_2019-09-15_18-27-44.raw.oga" \
-			--ldd-s1000 --ldd-S470 --ldd-l16 --stillframe 6 \
-			--doc --doc--overcorrect \
-			--decoder transform3d
-		;;
-	doc-aspen-off)
-		decode ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16
-		;;
-	doc-aspen-on)
-		decode ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16 \
-			--doc --doc--overcorrect
+	doc-aspen-*)
+		doc_decode "$testname" \
+			ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16
 		;;
 
 	# XXX Signals with varying chroma/burst amplitude
