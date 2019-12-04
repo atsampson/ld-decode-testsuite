@@ -351,6 +351,9 @@ doc_decode () {
 	*-on)
 		docargs="--doc --doc--overcorrect"
 		;;
+	*-on-intra)
+		docargs="--doc --doc--overcorrect --doc--intra"
+		;;
 	*)
 		echo >&2 "Unknown doc mode in $testname"
 		exit 1
@@ -484,7 +487,7 @@ all_tests="\
 	pr-motion123 pr-motion145 pr-motion155 \
 	"
 for doctest in kagemusha un aspen; do
-	all_tests="$all_tests doc-$doctest-off doc-$doctest-on"
+	all_tests="$all_tests doc-$doctest-off doc-$doctest-on doc-$doctest-on-intra"
 done
 if $videofiles; then
 	all_tests="$all_tests nr-motion pr-motion"
