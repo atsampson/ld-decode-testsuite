@@ -129,8 +129,14 @@ if [ ! -f "$out.tbc" ]; then
 fi
 
 if [ ! -f "$out.tbc.json.orig" ]; then
-	# This doesn't produce a new file.
-	action cp "$out.tbc.json" "$out.tbc.json.orig_"
+	# ld-process-vbi doesn't produce a new file. Careful, because:
+	# - we might need to restart this if ld-process-vbi fails;
+	# - the .json might be a symlink, in which case we shouldn't clobber
+	#   the target.
+	if [ ! -f "$out.tbc.json.orig_" ]; then
+		action mv "$out.tbc.json" "$out.tbc.json.orig_"
+	fi
+	action cp "$out.tbc.json.orig_" "$out.tbc.json"
 	action ld-process-vbi -n "$out.tbc"
 	action mv "$out.tbc.json.orig_" "$out.tbc.json.orig"
 fi
