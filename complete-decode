@@ -200,10 +200,6 @@ if [ ! -f "$out.mkv" ]; then
 	chargs=()
 	if [ -n "$decoder" ]; then
 		chargs+=(-f "$decoder")
-		# XXX For now...
-		if [ "$decoder" = transform3d ]; then
-			chargs+=(--transform-mode level)
-		fi
 	fi
 	chargs+=("$prevtbc")
 
