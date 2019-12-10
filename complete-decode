@@ -129,6 +129,26 @@ if [ ! -f "$out.tbc" ]; then
 	action ld-decode.py "--$standard" "${lddargs[@]}" "$infile" "$out"
 fi
 
+# Parse audio parameters from the .json.
+eval $(python3 -c '
+import json
+import sys
+
+with open(sys.argv[1]) as f:
+    j = json.load(f)
+
+analogue_params = [
+    "-t", "raw",
+    "-e", "signed" if j["pcmAudioParameters"]["isSigned"] else "unsigned",
+    "-L" if j["pcmAudioParameters"]["isLittleEndian"] else "-B",
+    "-b", str(j["pcmAudioParameters"]["bits"]),
+    "-r", str(j["pcmAudioParameters"]["sampleRate"]),
+    "-c", "2",
+    ]
+
+print("analogue_params=\"%s\"" % " ".join(analogue_params))
+' "$out.tbc.json")
+
 if [ ! -f "$out.tbc.json.orig" ]; then
 	# ld-process-vbi doesn't produce a new file. Careful, because:
 	# - we might need to restart this if ld-process-vbi fails;
@@ -171,7 +191,7 @@ if $analogue && [ ! -f "$out.analogue.flac" ]; then
 	effects+=(stats)
 
 	action sox \
-		-t raw -e signed -b 16 -r 48000 -c 2 "$out".pcm \
+		$analogue_params "$out.pcm"  \
 		"$out".analogue.flac \
 		"${effects[@]}"
 fi
