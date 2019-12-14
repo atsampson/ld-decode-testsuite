@@ -5,7 +5,7 @@
 # FIXME: Detect CX decoding automatically
 # FIXME: Detect audio configuration automatically from the VBI
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
-# FIXME: Clean up intermediate files (.doc, .map) once complete
+# FIXME: Clean up intermediate files (.map) once complete
 # FIXME: Extract chapter markers from the VBI or EFM
 # FIXME: Extract CC or Teletext subtitles from the VBI
 
@@ -205,13 +205,6 @@ fi
 
 prevtbc="$out".tbc
 
-if $dropouts; then
-	if [ ! -f "$out.doc" ]; then
-		action ld-dropout-correct --overcorrect "$prevtbc" "$out".doc
-	fi
-	prevtbc="$out".doc
-fi
-
 if $discmap; then
 	if [ ! -f "$out.map" ]; then
 		action ld-discmap "$prevtbc" "$out".map
@@ -224,55 +217,63 @@ if $noencode; then
 fi
 
 if [ ! -f "$out.mkv" ]; then
-	chargs=()
-	if [ -n "$decoder" ]; then
-		chargs+=(-f "$decoder")
-	fi
-	chargs+=("$prevtbc")
-
-	ffargs=(-f rawvideo -pix_fmt rgb48)
-	if [ "$standard" = pal ]; then
-		ffargs+=(-r 25 -s 928x576)
+	if $dropouts; then
+		doccmd=(ld-dropout-correct --overcorrect)
+		doccmd+=(--output-json "$out".doc.json "$prevtbc" -)
 	else
-		ffargs+=(-r 30000/1001 -s 760x488)
+		doccmd=(cat "$prevtbc")
 	fi
-	ffargs+=(-i -)
+
+	chcmd=(ld-chroma-decoder)
+	if [ -n "$decoder" ]; then
+		chcmd+=(-f "$decoder")
+	fi
+	chcmd+=(--input-json "$prevtbc.json" - -)
+
+	ffcmd=(ffmpeg -f rawvideo -pix_fmt rgb48)
+	if [ "$standard" = pal ]; then
+		ffcmd+=(-r 25 -s 928x576)
+	else
+		ffcmd+=(-r 30000/1001 -s 760x488)
+	fi
+	ffcmd+=(-i -)
 	streams=0
 	if $digital; then
-		ffargs+=(-i "$out".digital.flac)
+		ffcmd+=(-i "$out".digital.flac)
 		digstream=$streams
 		streams=$(($streams + 1))
 	fi
 	if $analogue; then
-		ffargs+=(-i "$out".analogue.flac)
+		ffcmd+=(-i "$out".analogue.flac)
 		anastream=$streams
 		streams=$(($streams + 1))
 	fi
 	if $extraaudio; then
-		ffargs+=(-i "$out".extra.flac)
+		ffcmd+=(-i "$out".extra.flac)
 		extrastream=$streams
 		streams=$(($streams + 1))
 	fi
 	for i in $(seq 0 $streams); do
-		ffargs+=(-map $i:0)
+		ffcmd+=(-map $i:0)
 	done
 	# Use yuvj444p for full range and no chroma subsampling.
-	ffargs+=( \
+	ffcmd+=( \
 		-pix_fmt yuvj444p \
 		-filter:v setfield=tff \
 		-codec:v libx264 -crf 16 -flags +ildct+ilme -aspect 4:3 \
 	)
 	if $digital; then
-		ffargs+=(-codec:a:$digstream copy)
+		ffcmd+=(-codec:a:$digstream copy)
 	fi
 	if $analogue; then
-		ffargs+=(-codec:a:$anastream copy)
+		ffcmd+=(-codec:a:$anastream copy)
 	fi
 	if $extraaudio; then
-		ffargs+=(-codec:a:$extrastream copy)
+		ffcmd+=(-codec:a:$extrastream copy)
 	fi
-	ffargs+=(-y "$out".mkv)
+	ffcmd+=(-y "$out".mkv)
 
-	action ld-chroma-decoder "${chargs[@]}" | \
-	action ffmpeg "${ffargs[@]}"
+	action "${doccmd[@]}" | \
+	action "${chcmd[@]}" | \
+	action "${ffcmd[@]}"
 fi
