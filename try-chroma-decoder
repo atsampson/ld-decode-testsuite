@@ -216,6 +216,14 @@ decode () {
 			;;
 		esac
 	fi
+	if ! grep -q getThresholdsSize "$ldddir/tools/ld-chroma-decoder/palcolour.h"; then
+		case "$usedecoder" in
+		transform*f)
+			echo >&2 "Test skipped because no Transform threshold file support: $testname"
+			return
+			;;
+		esac
+	fi
 
 	if $newonly && [ -f "$outdir/$testname-output.png" ]; then
 		echo >&2 "Test already done: $testname"
@@ -297,6 +305,12 @@ decode () {
 	else
 		decoder="$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder"
 		if [ -n "$usedecoder" ]; then
+			case "$usedecoder" in
+			transform3df)
+				decoder="$decoder --transform-thresholds $testsuitedir/transform3d.thresholds"
+				usedecoder="transform3d"
+				;;
+			esac
 			decoder="$decoder -f ${usedecoder}"
 		fi
 	fi
@@ -481,12 +495,17 @@ all_tests="\
 for frame in 2 4 25 54 77 88 122 123 145 155; do
 	all_tests="$all_tests pr-motion$frame"
 done
-for decoder in t2d t3d; do
-	all_tests="$all_tests testcardg-$decoder testcardg-$decoder-thresh0.3 testcardg-$decoder-level"
-	all_tests="$all_tests palbars-$decoder pr-sweep-$decoder"
+for decoder in t2d t3d t3df; do
+	all_tests="$all_tests testcardg-$decoder palbars-$decoder pr-sweep-$decoder"
+	if [ "$decoder" != "t3df" ]; then
+		all_tests="$all_tests testcardg-$decoder-thresh0.3 testcardg-$decoder-level"
+	fi
 	for frame in 2 25 122 123 155; do
 		all_tests="$all_tests pr-motion$frame-$decoder"
 	done
+	if $videofiles; then
+		all_tests="$all_tests pr-motion-$decoder"
+	fi
 done
 for doctest in kagemusha un aspen; do
 	all_tests="$all_tests doc-$doctest-off doc-$doctest-on doc-$doctest-on-intra"
@@ -569,6 +588,9 @@ run_test () {
 	palbars-t2d)
 		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform2d -l 1
 		;;
+	pr-motion-t2d)
+		decode pal "$GGV1011" --frame 19501 --decoder transform2d --stillframe 20
+		;;
 	pr-motion*-t2d)
 		num=$(echo "$testname" | sed -e s/pr-motion// -e s/-t2d//)
 		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") --decoder transform2d -l 1
@@ -592,12 +614,33 @@ run_test () {
 	palbars-t3d)
 		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform3d -l 1
 		;;
+	pr-motion-t3d)
+		decode pal "$GGV1011" --frame 19501 --decoder transform3d --stillframe 20
+		;;
 	pr-motion*-t3d)
 		num=$(echo "$testname" | sed -e s/pr-motion// -e s/-t3d//)
 		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") --decoder transform3d -l 1
 		;;
 	pr-sweep-t3d)
 		decode pal "$GGV1011" --frame 14301 --decoder transform3d -l 1
+		;;
+
+	# transform3d decoder with per-bin thresholds
+	testcardg-t3df)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3df -l 1
+		;;
+	palbars-t3df)
+		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform3df -l 1
+		;;
+	pr-motion-t3df)
+		decode pal "$GGV1011" --frame 19501 --decoder transform3df --stillframe 20
+		;;
+	pr-motion*-t3df)
+		num=$(echo "$testname" | sed -e s/pr-motion// -e s/-t3df//)
+		decode pal "$GGV1011" --frame $(expr 19501 + 25 \* "$num") --decoder transform3df -l 1
+		;;
+	pr-sweep-t3df)
+		decode pal "$GGV1011" --frame 14301 --decoder transform3df -l 1
 		;;
 
 	# mono decoder
