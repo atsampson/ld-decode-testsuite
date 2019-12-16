@@ -18,7 +18,7 @@ Options:
   -A               Disc has no analogue audio
   -D               Disc has no digital audio
   -3               Disc has AC3 audio (and no right analogue channel)
-  -c               Use ld-dropout-correct
+  -C               Don't use ld-dropout-correct
   -m               Use ld-discmap
   -V               Do everything except final encoding step
   -s FRAMES        Skip initial frames (ld-decode.py -s FRAMES)
@@ -38,14 +38,14 @@ testsuitedir="$(dirname $(realpath $0))"
 ac3=false
 analogue=true
 digital=true
-dropouts=false
+dropouts=true
 decoder=
 discmap=false
 dryrun=false
 standard=ntsc
 lddargs=()
 noencode=false
-while getopts "3Acf:Dmnps:V" c; do
+while getopts "3ACf:Dmnps:V" c; do
 	case "$c" in
 	3)
 		ac3=true
@@ -53,8 +53,8 @@ while getopts "3Acf:Dmnps:V" c; do
 	A)
 		analogue=false
 		;;
-	c)
-		dropouts=true
+	C)
+		dropouts=false
 		;;
 	f)
 		decoder="$OPTARG"
