@@ -6,7 +6,6 @@
 # FIXME: Detect audio configuration automatically from the VBI
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 # FIXME: Clean up intermediate files (.map) once complete
-# FIXME: Extract chapter markers from the VBI or EFM
 # FIXME: Extract CC or Teletext subtitles from the VBI
 
 usage () {
@@ -33,6 +32,8 @@ OUTPUT-BASE is the basename of the output files; if INPUT-FILE is
 EOF
 	exit 1
 }
+
+testsuitedir="$(dirname $(realpath $0))"
 
 ac3=false
 analogue=true
@@ -162,6 +163,10 @@ if [ ! -f "$out.tbc.json.orig" ]; then
 	action mv "$out.tbc.json.orig_" "$out.tbc.json.orig"
 fi
 
+if [ ! -f "$out.ffmetadata" ]; then
+	action "$testsuitedir/decode-vbi" --metadata "$out.ffmetadata" "$out.tbc.json"
+fi
+
 if $digital && [ ! -f "$out.digital.pcm" ]; then
 	action ld-process-efm --noninteractive "$out".efm "$out".digital.pcm
 fi
@@ -253,9 +258,12 @@ if [ ! -f "$out.mkv" ]; then
 		extrastream=$streams
 		streams=$(($streams + 1))
 	fi
+	ffcmd+=(-i "$out".ffmetadata)
+	metadatastream=$streams
 	for i in $(seq 0 $streams); do
 		ffcmd+=(-map $i:0)
 	done
+	ffcmd+=(-map_metadata $metadatastream)
 	# Use yuvj444p for full range and no chroma subsampling.
 	ffcmd+=( \
 		-pix_fmt yuvj444p \
