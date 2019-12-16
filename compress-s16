@@ -1,0 +1,13 @@
+#!/bin/sh
+# Compress a .s16 file to .raw.oga.
+# XXX Patch ld-compress to do this
+
+if [ -z "$1" ]; then
+	echo >&2 "Usage: $0 INPUT-FILE.s16"
+	exit 1
+fi
+
+out=$(basename "$1" .s16).raw.oga
+ffmpeg -hide_banner -loglevel error \
+	-f s16le -ar 40k -ac 1 -i "$1" \
+	-acodec flac -compression_level 11 -f ogg "$out"
