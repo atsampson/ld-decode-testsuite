@@ -202,7 +202,25 @@ def make_metadata(tbcjson, metadata_fn):
     # Add a dummy change at the end of the input, so we can get the length of the last chapter
     chapter_changes.append((len(tbcjson["fields"]), None))
 
-    # XXX Discard suspiciously short chapters?
+    # Because chapter markers have no error detection, a corrupt marker will
+    # result in a spurious chapter change. Remove suspiciously short chapters.
+    # XXX Do better when an error occurs near the start of a chapter
+    clean_changes = []
+    for i in range(len(chapter_changes) - 1):
+        change = chapter_changes[i]
+        next_change = chapter_changes[i + 1]
+
+        if (next_change[0] - change[0]) < 10:
+            # Too short - drop
+            pass
+        elif clean_changes != [] and change[1] == clean_changes[-1][1]:
+            # Change to the same chapter - drop
+            pass
+        else:
+            # Keep
+            clean_changes.append(change)
+    clean_changes.append(chapter_changes[-1])
+    chapter_changes = clean_changes
 
     # Begin the file
     if metadata_fn == "-":
