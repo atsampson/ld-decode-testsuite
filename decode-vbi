@@ -133,12 +133,11 @@ class FieldInfo:
                 self.seconds = (10 * (((value >> 16) & 0xF) - 0xA)) + getbcd((value >> 8) & 0xF)
                 self.frames = getbcd(value & 0xFF)
             elif (value & 0xF00000) == 0xF00000 and isbcd(value & 0x07FFFF):
-                # CAV picture number, and stop code on early discs
+                # CAV picture number
+                # Top bit duplicates stop code on early discs
                 self.status = "picture"
                 self.disctype = "cav"
                 self.picno = getbcd(value & 0x7FFFF)
-                if (value & 0x80000) != 0:
-                    self.stopcode = True
             elif (value & 0xF00FFF) == 0x800DDD and isbcd(value & 0x07F000):
                 # Chapter number
                 # Top bit is 0 for 400 tracks at start of chapter
