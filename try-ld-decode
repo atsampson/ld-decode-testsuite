@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# Test ld-decode.py.
+# Test ld-decode.
 
 usage () {
 	echo >&2 "Usage: $0 [TEST ...]"
@@ -36,7 +36,7 @@ decode () {
 	output="$tmpdir/decoded"
 	rm -f "$output".*
 
-	verbose $ldddir/ld-decode.py "$@" "$srcfile" "$output"
+	verbose $ldddir/ld-decode "$@" "$srcfile" "$output"
 
 	# Check the TBC and JSON files aren't empty.
 	for f in "$output".tbc "$output".tbc.json; do

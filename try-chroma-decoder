@@ -99,7 +99,11 @@ make_tbc () {
 		return
 	fi
 
-	verbose $ldddir/ld-decode.py "$@" "$lds" "${tbc%.tbc}"
+	lddecode="$ldddir/ld-decode.py"
+	if [ -f "$ldddir/ld-decode" ]; then
+		lddecode="$ldddir/ld-decode"
+	fi
+	verbose $lddecode "$@" "$lds" "${tbc%.tbc}"
 }
 
 # Generate a .tbc file using hacktv.

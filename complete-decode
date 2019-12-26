@@ -21,7 +21,7 @@ Options:
   -C               Don't use ld-dropout-correct
   -m               Use ld-discmap
   -V               Do everything except final encoding step
-  -s FRAMES        Skip initial frames (ld-decode.py -s FRAMES)
+  -s FRAMES        Skip initial frames (ld-decode -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -n               Dry-run mode; show what will be done
 
@@ -111,7 +111,7 @@ action () {
 
 	echo >&2 ">>>" "$@"
 	case "$1" in
-	ld-decode.py)
+	ld-decode)
 		"$@" 2>&1 | tee "$out".decode.log
 		;;
 	ld-process-efm)
@@ -127,7 +127,7 @@ action () {
 }
 
 if [ ! -f "$out.tbc" ]; then
-	action ld-decode.py "--$standard" "${lddargs[@]}" "$infile" "$out"
+	action ld-decode "--$standard" "${lddargs[@]}" "$infile" "$out"
 fi
 
 # Parse audio parameters from the .json.

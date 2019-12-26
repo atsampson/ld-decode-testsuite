@@ -6,26 +6,18 @@ ldddir="$(realpath $testsuitedir/../ld-decode)"
 
 prefix="$HOME/pkg/ld-decode"
 
-mkdir -p "$prefix/bin" "$prefix/lib"
+mkdir -p "$prefix/bin"
 
 for f in \
-	"$ldddir/tools/shared"/lib*.so* \
-	"$ldddir/tools/ld-decode-shared"/lib*.so* \
-	; do
-	if [ -f "$f" ]; then
-		ln -sf "$f" "$prefix/lib/"
-	fi
-done
-for f in \
-	"$ldddir/cx" \
-	"$ldddir/ld-cut.py" \
-	"$ldddir/ld-decode.py" \
+	"$ldddir/cx-expander" \
+	"$ldddir/ld-cut" \
+	"$ldddir/ld-decode" \
 	"$ldddir/ld-ldf-reader" \
-	"$ldddir/scripts/ld-compress.sh" \
+	"$ldddir/scripts/ld-compress" \
 	"$ldddir/tools/ld-analyse/ld-analyse" \
 	"$ldddir/tools/ld-chroma-decoder/encoder/ld-chroma-encoder" \
 	"$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder" \
-	"$ldddir/tools/ld-combine/ld-combine" \
+	"$ldddir/tools/ld-diffdod/ld-diffdod" \
 	"$ldddir/tools/ld-discmap/ld-discmap" \
 	"$ldddir/tools/ld-dropout-correct/ld-dropout-correct" \
 	"$ldddir/tools/ld-lds-converter/ld-lds-converter" \
