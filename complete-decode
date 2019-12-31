@@ -10,7 +10,7 @@
 
 usage () {
 	cat >&2 <<EOF
-Usage: $0 [options] INPUT-FILE [OUTPUT-BASE]
+Usage: $0 [options] INPUT [OUTPUT]
 $0 - Decode a LaserDisc image using ld-decode's tools
 
 Options:
@@ -25,10 +25,12 @@ Options:
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -n               Dry-run mode; show what will be done
 
-INPUT-FILE is the RF capture, typically a .lds file.
+INPUT may be an RF capture (.lds, .r8, .s8, .r16, .s16, .ldf, .raw.oga),
+or an already-decoded TBC file (.tbc).
 
-OUTPUT-BASE is the basename of the output files; if INPUT-FILE is
-"sample.lds", it will default to "out/sample".
+OUTPUT is the basename of the output files; if INPUT is an RF capture
+"sample.lds", it will default to "out/sample", and if INPUT is a TBC
+file it will default to its basename.
 
 -p will be assumed if either filename contains _PAL_, and -D will be
 assumed if either filename contains _ANA_. As PAL discs can't have both
@@ -89,23 +91,41 @@ while getopts "3ACf:Dmnps:V" c; do
 done
 shift $(expr $OPTIND - 1)
 
-if [ "$#" = 1 ]; then
-	infile="$1"
-	out=$(dirname "$1")/out/$(echo "$1" | sed 's/\.\(lds\|ldf\|r8\|r16\|raw\.oga\)$//')
-elif [ "$#" = 2 ]; then
-	infile="$1"
-	out="$2"
-else
+# Detect input/output files
+if [ "$#" -lt 1 -o "$#" -gt 2 ]; then
 	usage
+fi
+rffile=""
+in=""
+if [ "$#" -ge 1 ]; then
+	case "$1" in
+	*.lds|*.[rs]8|*.[rs]16|*.ldf|*.raw.oga)
+		rffile="$1"
+		out=$(dirname "$1")/out/$(echo "$1" | sed 's/\.\(lds\|[rs]8\|[rs]16\|ldf\|raw\.oga\)$//')
+		;;
+	*.tbc)
+		in=$(echo "$1" | sed 's/\.tbc$//')
+		out="$in"
+		;;
+	*)
+		usage
+		;;
+	esac
+fi
+if [ "$#" = 2 ]; then
+	out="$2"
+fi
+if [ -z "$in" ]; then
+	in="$out"
 fi
 
 # Detect audio modes based on options and filename
-case "$infile-$out" in
+case "$rffile-$out" in
 *_PAL_*)
 	standard=pal
 	;;
 esac
-case "$infile-$out" in
+case "$rffile-$out" in
 *_ANA_*)
 	digital=false
 	;;
@@ -141,14 +161,14 @@ action () {
 	esac
 }
 
-if [ ! -f "$out.tbc" ]; then
+if [ -n "$rffile" -a ! -f "$in.tbc" ]; then
 	if ! $analogue; then
 		lddargs+=(--daa)
 	fi
 	if ! $digital; then
 		lddargs+=(--noEFM)
 	fi
-	action ld-decode "--$standard" "${lddargs[@]}" "$infile" "$out"
+	action ld-decode "--$standard" "${lddargs[@]}" "$rffile" "$in"
 fi
 
 # Parse audio parameters from the .json.
@@ -173,27 +193,18 @@ analogue_params = [
     ]
 
 print("analogue_params=\"%s\"" % " ".join(analogue_params))
-' "$out.tbc.json")
+' "$in.tbc.json")
 
-if [ ! -f "$out.tbc.json.orig" ]; then
-	# ld-process-vbi doesn't produce a new file. Careful, because:
-	# - we might need to restart this if ld-process-vbi fails;
-	# - the .json might be a symlink, in which case we shouldn't clobber
-	#   the target.
-	if [ ! -f "$out.tbc.json.orig_" ]; then
-		action mv "$out.tbc.json" "$out.tbc.json.orig_"
-	fi
-	action cp "$out.tbc.json.orig_" "$out.tbc.json"
-	action ld-process-vbi -n "$out.tbc"
-	action mv "$out.tbc.json.orig_" "$out.tbc.json.orig"
+if [ ! -f "$out.vbi.json" ]; then
+	action ld-process-vbi -n --output-json "$out.vbi.json" "$in.tbc"
 fi
 
 if [ ! -f "$out.ffmetadata" ]; then
-	action "$testsuitedir/decode-vbi" --metadata "$out.ffmetadata" "$out.tbc.json"
+	action "$testsuitedir/decode-vbi" --metadata "$out.ffmetadata" "$out.vbi.json"
 fi
 
 if $digital && [ ! -f "$out.digital.pcm" ]; then
-	action ld-process-efm --noninteractive "$out".efm "$out".digital.pcm
+	action ld-process-efm --noninteractive "$in.efm" "$out.digital.pcm"
 fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
@@ -223,7 +234,7 @@ if $analogue && [ ! -f "$out.analogue.flac" ]; then
 	effects+=(stats)
 
 	action sox \
-		$analogue_params "$out.pcm"  \
+		$analogue_params "$in.pcm"  \
 		"$out".analogue.flac \
 		"${effects[@]}"
 fi
@@ -235,7 +246,7 @@ if [ -f "$out.extra.flac" ]; then
 	extraaudio=true
 fi
 
-prevtbc="$out".tbc
+prevtbc="$in.tbc"
 
 if $discmap; then
 	if [ ! -f "$out.map" ]; then
