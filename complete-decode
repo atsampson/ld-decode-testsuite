@@ -29,6 +29,11 @@ INPUT-FILE is the RF capture, typically a .lds file.
 
 OUTPUT-BASE is the basename of the output files; if INPUT-FILE is
 "sample.lds", it will default to "out/sample".
+
+-p will be assumed if either filename contains _PAL_, and -D will be
+assumed if either filename contains _ANA_. As PAL discs can't have both
+analogue and digital audio, PAL discs will be assumed to have digital
+audio unless -D or _ANA_ is used.
 EOF
 	exit 1
 }
@@ -94,9 +99,19 @@ else
 	usage
 fi
 
-if $analogue && $digital && [ "$standard" = pal ]; then
-	echo >&2 "PAL can't have both analogue and digital audio"
-	exit 1
+# Detect audio modes based on options and filename
+case "$infile-$out" in
+*_PAL_*)
+	standard=pal
+	;;
+esac
+case "$infile-$out" in
+*_ANA_*)
+	digital=false
+	;;
+esac
+if $digital && [ "$standard" = pal ]; then
+	analogue=false
 fi
 if $ac3 && [ "$standard" = pal ]; then
 	echo >&2 "PAL can't have AC3"
