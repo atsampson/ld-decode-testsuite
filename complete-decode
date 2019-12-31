@@ -150,8 +150,12 @@ eval $(python3 -c '
 import json
 import sys
 
-with open(sys.argv[1]) as f:
-    j = json.load(f)
+try:
+    with open(sys.argv[1]) as f:
+        j = json.load(f)
+except FileNotFoundError:
+    print("analogue_params=\"-t unknown\"")
+    sys.exit(0)
 
 analogue_params = [
     "-t", "raw",
@@ -190,9 +194,11 @@ if $digital && [ ! -f "$out.digital.flac" ]; then
 	effects=()
 	# Assume the whole digital audio stream needs de-emphasis if
 	# ld-process-efm found more than a handful of preemphasised frames.
-	preemp_frames=$( (grep 'Total Preemp Frames' "$out".efm.log || echo ':0') | sed -e 's/.*: *//' -e 'q')
-	if [ "$preemp_frames" -gt 10 ]; then
-		effects+=(deemph)
+	if [ -f "$out.efm.log" ]; then
+		preemp_frames=$( (grep 'Total Preemp Frames' "$out".efm.log || echo ':0') | sed -e 's/.*: *//' -e 'q')
+		if [ "$preemp_frames" -gt 10 ]; then
+			effects+=(deemph)
+		fi
 	fi
 	effects+=(stats)
 
