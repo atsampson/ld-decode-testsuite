@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+# Extract a range of fields from a TBC file.
+
+import argparse
+import json
+
+def main():
+    parser = argparse.ArgumentParser(description='Extract a range of fields from a TBC file')
+    parser.add_argument('infile', metavar='infile',
+                        help='input TBC file')
+    parser.add_argument('outfile', metavar='outfile',
+                        help='output TBC file')
+    parser.add_argument('-s', '--start', metavar='N', type=int, default=1,
+                        help='seqNo of first field to extract (default 1)')
+    parser.add_argument('-l', '--length', metavar='N', type=int,
+                        help='number of fields to extract (default all)')
+    args = parser.parse_args()
+
+    assert args.infile != args.outfile
+
+    # Read input JSON
+    with open(args.infile + '.json') as f:
+        data = json.load(f)
+
+    num_fields = len(data['fields'])
+    assert num_fields == data['videoParameters']['numberOfSequentialFields']
+
+    # Compute start position
+    start_idx = args.start - 1
+    assert start_idx >= 0
+    assert start_idx <= num_fields
+    assert data['fields'][start_idx]['isFirstField']
+
+    # Compute stop position
+    if args.length is None:
+        stop_idx = num_fields
+    else:
+        stop_idx = start_idx + args.length
+    assert stop_idx >= start_idx
+    assert stop_idx <= num_fields
+
+    # Build fields array for the output JSON
+    new_fields = []
+    new_idx = 1
+    for idx in range(start_idx, stop_idx):
+        field = data['fields'][idx]
+        assert field['seqNo'] == idx + 1
+
+        field['seqNo'] = new_idx
+        new_idx += 1
+        new_fields.append(field)
+
+    # Update JSON
+    data['fields'] = new_fields
+    data['videoParameters']['numberOfSequentialFields'] = len(new_fields)
+
+    # Write output JSON
+    with open(args.outfile + '.json', 'w') as f:
+        json.dump(data, f)
+
+    # Copy fields to the new TBC
+    field_size = data['videoParameters']['fieldWidth'] * data['videoParameters']['fieldHeight'] * 2
+    with open(args.outfile, 'wb') as fout:
+        with open(args.infile, 'rb') as fin:
+            fin.seek(field_size * start_idx)
+            for i in range(start_idx, stop_idx):
+                data = fin.read(field_size)
+                assert len(data) == field_size
+                fout.write(data)
+
+if __name__ == '__main__':
+    main()
