@@ -20,6 +20,7 @@ for f in \
 	"$ldddir/tools/ld-diffdod/ld-diffdod" \
 	"$ldddir/tools/ld-discmap/ld-discmap" \
 	"$ldddir/tools/ld-dropout-correct/ld-dropout-correct" \
+	"$ldddir/tools/ld-export-metadata/ld-export-metadata" \
 	"$ldddir/tools/ld-lds-converter/ld-lds-converter" \
 	"$ldddir/tools/ld-ldstoefm/ld-ldstoefm" \
 	"$ldddir/tools/ld-process-efm/ld-process-efm" \

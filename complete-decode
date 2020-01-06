@@ -200,7 +200,7 @@ if [ ! -f "$out.vbi.json" ]; then
 fi
 
 if [ ! -f "$out.ffmetadata" ]; then
-	action "$testsuitedir/decode-vbi" --metadata "$out.ffmetadata" "$out.vbi.json"
+	action ld-export-metadata --ffmetadata "$out.ffmetadata" "$out.vbi.json"
 fi
 
 if $digital && [ ! -f "$out.digital.pcm" ]; then
