@@ -25,7 +25,7 @@ Options:
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -n               Dry-run mode; show what will be done
 
-INPUT may be an RF capture (.lds, .r8, .s8, .r16, .s16, .ldf, .raw.oga),
+INPUT may be an RF capture (.lds, .r8, .u8, .r16, .s16, .ldf, .raw.oga),
 or an already-decoded TBC file (.tbc).
 
 OUTPUT is the basename of the output files; if INPUT is an RF capture
@@ -99,9 +99,9 @@ rffile=""
 in=""
 if [ "$#" -ge 1 ]; then
 	case "$1" in
-	*.lds|*.[rs]8|*.[rs]16|*.ldf|*.raw.oga)
+	*.lds|*.[ru]8|*.[rs]16|*.ldf|*.raw.oga)
 		rffile="$1"
-		out=$(dirname "$1")/out/$(echo "$1" | sed 's/\.\(lds\|[rs]8\|[rs]16\|ldf\|raw\.oga\)$//')
+		out=$(dirname "$1")/out/$(echo "$1" | sed 's/\.\(lds\|[ru]8\|[rs]16\|ldf\|raw\.oga\)$//')
 		;;
 	*.tbc)
 		in=$(echo "$1" | sed 's/\.tbc$//')
