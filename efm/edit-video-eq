@@ -1,0 +1,227 @@
+#!/usr/bin/python3
+# Interactively edit video EQ parameters and view the results.
+
+import concurrent.futures
+import gi
+import matplotlib.backends.backend_gtk3cairo
+import matplotlib.figure
+import numpy as np
+import os
+import scipy.signal as sps
+import sys
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import GLib, Gtk
+
+from efmfilter import SAMPLE_RATE, FFTFilter, VideoEqualiser
+
+class InputFile:
+    """A TBC file that can be viewed."""
+
+    def __init__(self, filename):
+        self.filename = os.path.basename(filename)
+        # mmap the file to avoid loading it all into memory
+        self.data = np.memmap(filename=filename, dtype=np.uint16, mode="r")
+
+        self.field = 1000
+        self.line = 18
+        if True:
+            # PAL
+            self.line_length = 1135
+            self.num_lines = 313
+        else:
+            # NTSC
+            self.line_length = 910
+            self.num_lines = 263
+
+        self.field_length = self.line_length * self.num_lines
+        self.num_fields = len(self.data) // self.field_length
+
+class GUI:
+    """The GUI and its state."""
+
+    def __init__(self, args):
+        self.chart_length = None
+
+        # XXX sample rate wrong
+        # XXX linear interp for EQ
+        # XXX measure VITS?
+        # XXX display video output
+        self.fft = FFTFilter()
+        self.eq = VideoEqualiser()
+
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
+        self.futures = []
+
+        # Command-line args are input filenames
+        self.files = [InputFile(arg) for arg in args]
+        assert len(self.files) > 0
+        self.current_file = self.files[0]
+
+        # Main window
+        window = Gtk.Window()
+        # XXX keybinding for quit
+        window.connect("delete-event", Gtk.main_quit)
+
+        # Grid layout
+        grid = Gtk.Grid()
+        grid.set_column_spacing(10)
+        window.add(grid)
+        grid_w = 4
+
+        # matplotlib charts
+        figure = matplotlib.figure.Figure()
+        figure.set_tight_layout(True)
+        nrows, ncols = 2, 1
+        self.before_ax = figure.add_subplot(nrows, ncols, 1)
+        self.after_ax = figure.add_subplot(nrows, ncols, 2)
+        self.canvas = matplotlib.backends.backend_gtk3cairo.FigureCanvasGTK3Cairo(figure)
+        self.canvas.set_size_request(1200 * ncols, 400 * nrows)
+        grid.attach(self.canvas, 0, 0, grid_w, 1)
+
+        col = 0
+        row_count = [1]
+        def add_scale(name):
+            label = Gtk.Label.new(name)
+            grid.attach(label, col, row_count[0], 1, 1)
+
+            scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL)
+            scale.set_hexpand(True)
+            scale.set_value_pos(Gtk.PositionType.RIGHT)
+            grid.attach(scale, col + 1, row_count[0], 1, 1)
+
+            row_count[0] += 1
+            return scale
+
+        # File selection widget
+        label = Gtk.Label.new("File")
+        grid.attach(label, col + 2, row_count[0], 1, 1)
+        selector = Gtk.ComboBoxText()
+        for ifile in self.files:
+            selector.append(None, ifile.filename)
+        selector.set_active(0)
+        selector.connect("changed", self.file_changed)
+        grid.attach(selector, col + 3, row_count[0], 1, 1)
+
+        # Field and line selection widgets
+        self.field_scale = add_scale("Field")
+        self.field_scale.set_digits(0)
+        self.field_scale.connect("value-changed", self.field_changed)
+        self.line_scale = add_scale("Line")
+        self.line_scale.set_digits(0)
+        self.line_scale.connect("value-changed", self.line_changed)
+
+        # Amplitude equaliser widgets
+        self.amp_scales = []
+        for i, freq in enumerate(self.eq.freqs):
+            scale = add_scale("Amplitude %.1f MHz" % (freq / 1.0e6))
+            scale.set_range(0.0, 1.5)
+            scale.set_value(self.eq.amp[i])
+            scale.set_digits(2)
+            scale.connect("value-changed", self.eq_changed)
+            self.amp_scales.append(scale)
+
+        col = 2
+        row_count = [2]
+
+        # Phase equaliser widgets
+        self.phase_base_scale = add_scale("Phase base")
+        self.phase_base_scale.set_range(-np.pi, np.pi)
+        self.phase_base_scale.set_value(0)
+        self.phase_base_scale.set_digits(2)
+        self.phase_base_scale.connect("value-changed", self.eq_changed)
+        self.phase_scales = []
+        for i, freq in enumerate(self.eq.freqs):
+            scale = add_scale("Phase %.1f MHz" % (freq / 1.0e6))
+            scale.set_range(-np.pi, np.pi)
+            scale.set_value(self.eq.phase[i])
+            scale.set_digits(2)
+            scale.connect("value-changed", self.eq_changed)
+            self.phase_scales.append(scale)
+
+        # Update all the dynamic bits and show the window
+        self.update_file()
+        self.update_filter()
+        window.show_all()
+
+    def field_changed(self, widget, user_data=None):
+        self.current_file.field = int(widget.get_value())
+        self.update_filter()
+
+    def line_changed(self, widget, user_data=None):
+        self.current_file.line = int(widget.get_value())
+        self.update_filter()
+
+    def file_changed(self, widget, user_data=None):
+        self.current_file = self.files[int(widget.get_active())]
+        self.update_file()
+        self.update_filter()
+
+    def eq_changed(self, widget, user_data=None):
+        self.update_filter()
+
+    def update_file(self):
+        """Update the GUI for a change in input file."""
+
+        self.chart_length = self.current_file.line_length
+
+        # XXX Limit?
+        self.field_scale.set_range(0, self.current_file.num_fields)
+        self.field_scale.set_value(self.current_file.field)
+
+        self.line_scale.set_range(0, self.current_file.num_lines)
+        self.line_scale.set_value(self.current_file.line)
+
+    def update_filter(self):
+        """Update the GUI for a change in filter parameters."""
+
+        start = self.current_file.field * self.current_file.field_length
+        start += self.current_file.line * self.current_file.line_length
+        end = start + self.chart_length
+
+        self.input_data = self.current_file.data[start:end]
+
+        # Compute the filter
+        self.eq.amp[:] = [w.get_value() for w in self.amp_scales]
+        self.eq.phase[:] = [w.get_value() + self.phase_base_scale.get_value() for w in self.phase_scales]
+        print("amp=", self.eq.amp, "phase=", self.eq.phase)
+        self.eq.compute(self.fft)
+
+        # Cancel any already-scheduled background jobs if possible.
+        # (This will include any that have already started or completed from
+        # the last time we did this, but that's harmless.)
+        for future in self.futures:
+            future.cancel()
+        self.futures = []
+
+        # Start calculations in the background
+        self.futures.append(self.executor.submit(self.update_charts))
+
+    def update_charts(self):
+        # Plot the "before" chart
+        GLib.idle_add(self.plot_chart, self.before_ax, self.input_data, "Input signal")
+
+        # Filter and plot the "after" chart
+        after_data = self.fft.apply(self.input_data, self.eq.filter)
+        GLib.idle_add(self.plot_chart, self.after_ax, after_data, "Equalised signal")
+
+    def plot_chart(self, ax, y_data, title):
+        """Idle callback to update the before or after chart."""
+
+        # XXX This is still a bit clunky, as the plotting itself is expensive...
+        ax.clear()
+        ax.plot(range(self.chart_length), y_data)
+        ax.set_ylim(bottom=0, top=65535)
+
+        # Tweak appearance
+        ax.grid(True)
+        ax.set_title(title)
+
+        self.canvas.draw()
+
+    def main(self):
+        Gtk.main()
+
+if __name__ == "__main__":
+    gui = GUI(sys.argv[1:])
+    gui.main()

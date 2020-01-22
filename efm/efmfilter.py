@@ -199,6 +199,20 @@ class EFMEqualiser:
 
         comp *= self.coeffs
 
+class VideoEqualiser(EFMEqualiser):
+    """Frequency-domain equalisation filter for TBC video."""
+
+    def __init__(self):
+        # Frequency bands
+        self.freqs = np.linspace(0.0e6, 15e6, num=4)
+
+        # Amplitude and phase adjustments for each band.
+        # These values were adjusted empirically based on a selection of NTSC and PAL samples.
+        self.amp = np.ones(len(self.freqs), np.float)
+        self.phase = np.zeros(len(self.freqs), np.float)
+
+        self.coeffs = None
+
 if __name__ == "__main__":
     # Test FFTFilter with various sizes of data to ensure blocking works properly
     fft = FFTFilter()
