@@ -23,6 +23,8 @@ Options:
   -V               Do everything except final encoding step
   -s FRAMES        Skip initial frames (ld-decode -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
+  -d               Deinterlace before encoding
+  -c CRF           Set CRF for x264 (default 16)
   -n               Dry-run mode; show what will be done
 
 INPUT may be an RF capture (.lds, .r8, .u8, .r16, .s16, .ldf, .raw.oga),
@@ -46,13 +48,15 @@ ac3=false
 analogue=true
 digital=true
 dropouts=true
+x264crf=16
+deinterlace=false
 decoder=
 discmap=false
 dryrun=false
 standard=ntsc
 lddargs=()
 noencode=false
-while getopts "3ACf:Dmnps:V" c; do
+while getopts "3ACc:Ddf:mnps:V" c; do
 	case "$c" in
 	3)
 		ac3=true
@@ -62,6 +66,12 @@ while getopts "3ACf:Dmnps:V" c; do
 		;;
 	C)
 		dropouts=false
+		;;
+	c)
+		x264crf="$OPTARG"
+		;;
+	d)
+		deinterlace=true
 		;;
 	f)
 		decoder="$OPTARG"
@@ -305,12 +315,19 @@ if [ ! -f "$out.mkv" ]; then
 		ffcmd+=(-map $i:0)
 	done
 	ffcmd+=(-map_metadata $metadatastream)
+	filters="setfield=tff"
+	if $deinterlace; then
+		filters="$filters,bwdif"
+	fi
 	# Use yuvj444p for full range and no chroma subsampling.
 	ffcmd+=( \
+		-filter:v "$filters" \
 		-pix_fmt yuvj444p \
-		-filter:v setfield=tff \
-		-codec:v libx264 -crf 16 -flags +ildct+ilme -aspect 4:3 \
+		-codec:v libx264 -crf "$x264crf" -aspect 4:3 \
 	)
+	if ! $deinterlace; then
+		ffcmd+=(-flags +ildct+ilme)
+	fi
 	if $digital; then
 		ffcmd+=(-codec:a:$digstream copy)
 	fi
