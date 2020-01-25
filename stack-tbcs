@@ -1,0 +1,75 @@
+#!/bin/bash -ex
+# Experiment with stacking multiple copies of the same disc.
+
+if true; then
+	in1=/d/extra/laserdisc/mp1.tbc
+	in2=/d/extra/laserdisc/mp2.tbc
+	in3=/d/extra/laserdisc/mp3.tbc
+elif true; then
+	in1=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set1_CLV_PAL_ANA_side1_4400_2019-08-24_18-40-31.tbc
+	in2=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set2_CLV_PAL_ANA_side1_4400_2019-10-11_16-38-08.tbc
+	in3=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set3_CLV_PAL_ANA_side1_4400_2020-01-04_19-51-44.tbc
+else
+	in1=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set1_CLV_PAL_ANA_side2_4400_2019-08-24_19-43-24.tbc
+	in2=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set2_CLV_PAL_ANA_side2_4400_2019-10-11_17-39-18.tbc
+	in3=/n/stuff2/capture/laserdisc/out/MontyPython2x08-10set3_CLV_PAL_ANA_side2_4400_2020-01-04_20-52-51.tbc
+fi
+
+format="-f rawvideo -pix_fmt gray16 -s 1135x626 -r 25"
+
+for out in 1 median docmedian mean docmean; do
+	echo "--- Making $out ---"
+
+	case "$out" in
+	1)
+		# First copy only (this is equivalent to cat!)
+		ffmpeg \
+			$format -i "$in1" \
+			$format -
+		;;
+	median)
+		# Median of three copies (does a pretty good job of removing dropouts by itself)
+		ffmpeg \
+			$format -i "$in1" \
+			$format -i "$in2" \
+			$format -i "$in3" \
+			-filter_complex xmedian=inputs=3 \
+			$format -
+		;;
+	docmedian)
+		# Median of three dropout-corrected copies
+		ffmpeg \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in1" -) \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in2" -) \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in3" -) \
+			-filter_complex xmedian=inputs=3 \
+			$format -
+		;;
+	mean)
+		# Mean of three copies
+		# XXX docs for mix call the option "nb_inputs"
+		ffmpeg \
+			$format -i "$in1" \
+			$format -i "$in2" \
+			$format -i "$in3" \
+			-filter_complex mix=inputs=3 \
+			$format -
+		;;
+	docmean)
+		# Mean of three dropout-corrected copies
+		ffmpeg \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in1" -) \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in2" -) \
+			$format -i <(ld-dropout-correct --overcorrect --output-json /dev/null "$in3" -) \
+			-filter_complex mix=inputs=3 \
+			$format -
+		;;
+	esac \
+	| ld-chroma-decoder \
+		-f transform3d --input-json "$in1.json" -d - - \
+	| ffmpeg \
+		-f rawvideo -pix_fmt rgb48 -s 928x576 -r 25 -i - \
+		-vf bwdif \
+		-c:v libx264 -preset ultrafast -crf 0 -flags +ildct+ilme -aspect 4:3 \
+		-y "stacked-$out.mkv"
+done
