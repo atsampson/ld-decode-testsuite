@@ -9,7 +9,7 @@ import shlex
 import sys
 
 sys.path.append("../ld-decode")
-import lddutils
+import lddecode.utils
 
 # .lds has 10-bit samples at 40 MHz.
 # 4 samples are packed into 5 bytes.
@@ -35,8 +35,8 @@ def scan(filename):
         while offset_samples < length_samples:
             offset_bytes = (offset_samples // 4) * 5
 
-            # lddutils loaders return 16-bit signed values
-            data = lddutils.load_packed_data_4_40(f, offset_samples, CHUNK_SIZE).astype(np.float)
+            # lddecode loaders return 16-bit signed values
+            data = lddecode.utils.load_packed_data_4_40(f, offset_samples, CHUNK_SIZE).astype(np.float)
 
             # Compute peak and RMS amplitude
             peak = np.max(np.abs(data))
