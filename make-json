@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+# Given a .tbc file using PAL 4xfSC subcarrier-locked sampling, generate a
+# .tbc.json that describes it.
+#
+# Usage: make-json input.tbc [output.tbc.json]
+
+import json
+import optparse
+import os
+import sys
+
+# Parse command-line options
+parser = optparse.OptionParser(usage="usage: %prog [options] TBC-FILE [JSON-FILE]")
+options, args = parser.parse_args(sys.argv[1:])
+
+# Subcarrier frequency in Hz
+fSC = 4433618.75
+
+# Parameters we're trying to generate (based upon ld-decode output)
+videoParameters = {
+    "activeVideoEnd": 1107.0,
+    "activeVideoStart": 185.0,
+    "black16bIre": 16384.0,
+    "colourBurstEnd": 138.0,
+    "colourBurstStart": 98.0,
+    "fieldHeight": 313,
+    "fieldWidth": 1135,
+    "fsc": fSC,
+    "isSourcePal": True,
+    "isSubcarrierLocked": True,
+    "numberOfSequentialFields": 0, # We'll fill this in later
+    "sampleRate": fSC * 4,
+    "white16bIre": 54016.0,
+    }
+
+# Parse positional args
+if len(args) == 1:
+    input_tbc = args[0]
+    output_json = input_tbc + ".json"
+elif len(args) == 2:
+    input_tbc = args[0]
+    output_json = args[1]
+else:
+    parser.error("no input/output filenames specified")
+
+# Measure the length of the video
+input_len = os.stat(input_tbc).st_size
+field_size = 2 * videoParameters["fieldHeight"] * videoParameters["fieldWidth"]
+numFields = input_len // field_size
+if (input_len % field_size) != 0:
+    print("TBC length", input_len, "is not a multiple of field size",
+          field_size, file=sys.stderr)
+    sys.exit(1)
+
+# ld-decode computes medianBurstIRE as sqrt(2) * RMS(samples in colourburst in
+# IRE form), i.e. half the P-P amplitude of the colourburst. This is used as
+# part of the chroma gain calculation in ld-chroma-decoder to compensate for HF
+# rolloff.
+medianBurstIRE = (3.0 / 7.0) * 100.0 / 2
+
+# Generate JSON info for fields
+fields = []
+for i in range(numFields):
+    field = {
+        # ld-chroma-decoder cares about these values:
+        "isFirstField": (i % 2) == 0,
+        "seqNo": i + 1,
+        "medianBurstIRE": medianBurstIRE,
+
+        # And doesn't care about these, so provide dummy values:
+        "syncConf": 100,
+        "diskLoc": i + 1,
+        "decodeFaults": 0,
+        "vitsMetrics": {"wSNR": 42.0, "bPSNR": 42.0},
+        "vbi": {"vbiData": [42, 42, 42]},
+        "audioSamples": 42,
+        }
+    fields.append(field)
+
+# Write the JSON
+videoParameters["numberOfSequentialFields"] = numFields
+with open(output_json, "w") as f:
+    json.dump({
+        "videoParameters": videoParameters,
+        "fields": fields,
+        }, f, indent=2)
