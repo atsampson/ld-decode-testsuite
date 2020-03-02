@@ -120,6 +120,20 @@ make_hacktv_tbc () {
 	verbose $testsuitedir/hacktv-to-tbc "--$system" -l "$length" "$tbc" -G 1.0 "$@"
 }
 
+# Link to an existing .tbc.
+link_tbc () {
+	outtbc="$1"
+	intbc="$2"
+	shift 2
+
+	if [ -f "$tbc" ]; then
+		return
+	fi
+
+	verbose ln -sf "$intbc" "$outtbc"
+	verbose ln -sf "$intbc.json" "$outtbc.json"
+}
+
 # Chroma-decode a capture.
 decode () {
 	system="$1"
@@ -130,6 +144,7 @@ decode () {
 	stillframe=0
 	use3d=
 	usedecoder="${system}2d"
+	nogain=false
 	noise=
 	lddargs=
 	tbcsource=ld-decode
@@ -161,6 +176,11 @@ decode () {
 			# Use a specific decoder
 			usedecoder="$2"
 			shift 2
+			;;
+		--nogain)
+			# Defeat chroma gain fudge factor
+			nogain=true
+			shift 1
 			;;
 		--noise)
 			# Add random noise to the TBC
@@ -203,6 +223,14 @@ decode () {
 	case "$lds" in
 	test:*)
 		# hacktv's internal source
+		;;
+	*.tbc)
+		# Existing TBC file
+		if ! [ -f "$lds" -a -f "$lds.json" ]; then
+			echo >&2 "Test skipped because source file is missing: $testname"
+			return
+		fi
+		tbcsource=link
 		;;
 	*)
 		if ! [ -f "$lds" ]; then
@@ -281,6 +309,9 @@ decode () {
 	hacktv)
 		make_hacktv_tbc "$tbc" "$system" "$hacktvlength" "$lds"
 		;;
+	link)
+		link_tbc "$tbc" "$lds"
+		;;
 	esac
 
 	if [ -n "$noise" ]; then
@@ -326,6 +357,9 @@ decode () {
 	fi
 	if [ "$use3d" = "--3dmap" ]; then
 		decoder="$decoder --oftest"
+	fi
+	if $nogain; then
+		decoder="$decoder --chroma-gain 1.0"
 	fi
 	if [ -n "$extraopts" ]; then
 		decoder="$decoder $extraopts"
@@ -800,6 +834,12 @@ run_test () {
 		;;
 	hp-testcardj)
 		decode pal "/n/stuff/tv/Testcards/tcj-43.mkv" --hacktv 16
+		;;
+
+	# Synthetic tests using BBC encoder
+	bbc-couple-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/xc_couple.tbc" --nogain --decoder "$decoder" --stillframe 25
 		;;
 
 	# Performance tests
