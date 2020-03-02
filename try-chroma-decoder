@@ -151,6 +151,7 @@ decode () {
 	hacktvlength=0
 	usedoc=
 	docargs=
+	aspect=4:3
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -207,6 +208,11 @@ decode () {
 			# Pass argument to ld-dropout-correct
 			docargs="$docargs ${1#--doc}"
 			shift 1
+			;;
+		--aspect)
+			# Override aspect ratio
+			aspect="$2"
+			shift 2
 			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
@@ -384,7 +390,7 @@ decode () {
 		$ffmpegout -r $fps \
 			-i "$rgb" \
 			-filter:v setfield=tff \
-			-codec:v libx264rgb -crf 16 -flags +ildct+ilme -aspect 4:3 \
+			-codec:v libx264rgb -crf 16 -flags +ildct+ilme -aspect  "$aspect" \
 			"$outdir/$testname.mkv"
 	fi
 }
@@ -839,7 +845,7 @@ run_test () {
 	# Synthetic tests using BBC encoder
 	bbc-couple-*)
 		decoder=$(echo "$testname" | sed 's/.*-//')
-		decode pal "$ATSDATA/BBC/xc_couple.tbc" --nogain --decoder "$decoder" --stillframe 25
+		decode pal "$ATSDATA/BBC/xc_couple.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 25
 		;;
 
 	# Performance tests
