@@ -847,6 +847,26 @@ run_test () {
 		decoder=$(echo "$testname" | sed 's/.*-//')
 		decode pal "$ATSDATA/BBC/xc_couple.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 25
 		;;
+	bbc-mobcal-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/mobcal.tbc" --nogain --decoder "$decoder" --stillframe 25
+		;;
+	bbc-newpat-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/newpat_pm.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 5
+		;;
+	bbc-swinging-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/hv_swinging_bars.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 7
+		;;
+
+	# Synthetic tests using ld-chroma-encoder
+	# XXX Generate these automatically (since the sources are public)
+	# XXX Compare line-locked and subcarrier-locked
+	vqeg-mobcal-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/VQEG/vqeg-mobilecalendar.tbc" --nogain --decoder "$decoder" --stillframe 25 -s 97
+		;;
 
 	# Performance tests
 	bench-ntsc2d)
