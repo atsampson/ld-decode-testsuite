@@ -330,6 +330,7 @@ decode () {
 
 	if [ -n "$usedoc" ]; then
 		doctbc="$tbc.doc"
+		rm -f "$doctbc" "$doctbc.json"
 		if ! verbose $ldddir/tools/ld-dropout-correct/ld-dropout-correct $docargs "$tbc" "$doctbc"; then
 			touch "$outdir/$testname.FAILED"
 			return
