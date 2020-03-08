@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+# Compute and display the response of a FIR UV postfilter for Transform PAL.
+#
+# Richard Russell provided the parameters below from paldecc.fir, along with
+# the response computed by FIRBBC (which matches what this produces, since it
+# uses the same algorithm as sps.remez).
+
+import numpy as np
+import scipy.signal as sps
+import matplotlib.pyplot as plt
+
+fSC = 4433618.75
+rate = 4 * fSC
+
+# The original implementation was 16 taps
+tap_counts = [15, 16, 17]
+
+fig, (linax, logax) = plt.subplots(2)
+
+for n in tap_counts:
+    coeffs = sps.remez(n,
+                       [0.0, 2.15e6, 4.6e6, rate / 2],
+                       [1.0,         0.0],
+                       [1.0,         1.0],
+                       fs=rate)
+
+    print(n, coeffs)
+
+    w, h = sps.freqz(coeffs, fs=rate)
+    linax.plot(w, np.abs(h))
+    logax.plot(w, 20 * np.log10(np.abs(h)))
+
+for ax in (linax, logax):
+    ax.legend(["%d taps" % n for n in tap_counts])
+    ax.set_xlabel('Frequency')
+    ax.set_xlim(0, rate / 2)
+    ax.grid(True)
+linax.set_ylabel('Magnitude response (linear)')
+logax.set_ylabel('Magnitude response (dB)')
+
+plt.show()
