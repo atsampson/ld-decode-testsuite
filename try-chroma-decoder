@@ -558,6 +558,11 @@ done
 if $videofiles; then
 	all_tests="$all_tests nr-motion pr-motion"
 fi
+for bbctest in couple mobcal newpat newpatcirc swinging wheel; do
+	for decoder in mono pal2d transform2d transform3d; do
+		all_tests="$all_tests bbc-$bbctest-$decoder"
+	done
+done
 run_test () {
 	testname="$1"
 
@@ -856,9 +861,17 @@ run_test () {
 		decoder=$(echo "$testname" | sed 's/.*-//')
 		decode pal "$ATSDATA/BBC/newpat_pm.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 5
 		;;
+	bbc-newpatcirc-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/circling_newpat_pm.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 5
+		;;
 	bbc-swinging-*)
 		decoder=$(echo "$testname" | sed 's/.*-//')
-		decode pal "$ATSDATA/BBC/hv_swinging_bars.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 7
+		decode pal "$ATSDATA/BBC/hv_swinging_bars_12.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 6
+		;;
+	bbc-wheel-*)
+		decoder=$(echo "$testname" | sed 's/.*-//')
+		decode pal "$ATSDATA/BBC/wheel.tbc" --nogain --decoder "$decoder" --stillframe 50
 		;;
 
 	# Synthetic tests using ld-chroma-encoder
