@@ -18,19 +18,22 @@ fSC = 4433618.75
 
 # Parameters we're trying to generate (based upon ld-decode output)
 videoParameters = {
-    "activeVideoEnd": 1107.0,
-    "activeVideoStart": 185.0,
-    "black16bIre": 16384.0,
-    "colourBurstEnd": 138.0,
-    "colourBurstStart": 98.0,
-    "fieldHeight": 313,
-    "fieldWidth": 1135,
-    "fsc": fSC,
-    "isSourcePal": True,
-    "isSubcarrierLocked": True,
-    "numberOfSequentialFields": 0, # We'll fill this in later
     "sampleRate": fSC * 4,
+    "isSubcarrierLocked": True,
+    "isSourcePal": True,
+    "fsc": fSC,
+
+    "black16bIre": 16384.0,
     "white16bIre": 54016.0,
+
+    "fieldWidth": 1135,
+    "fieldHeight": 313,
+    "colourBurstStart": 98.0,
+    "colourBurstEnd": 138.0,
+    "activeVideoStart": 185.0,
+    "activeVideoEnd": 1107.0,
+
+    "numberOfSequentialFields": 0, # We'll fill this in later
     }
 
 # Parse positional args
