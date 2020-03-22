@@ -5,6 +5,7 @@
 # the response computed by FIRBBC (which matches what this produces, since it
 # uses the same algorithm as sps.remez).
 
+import collections
 import numpy as np
 import scipy.signal as sps
 import matplotlib.pyplot as plt
@@ -12,26 +13,32 @@ import matplotlib.pyplot as plt
 fSC = 4433618.75
 rate = 4 * fSC
 
-# The original implementation was 16 taps
-tap_counts = [15, 16, 17]
+Filter = collections.namedtuple('Filter', ['name', 'coeffs'])
+filters = []
 
-fig, (linax, logax) = plt.subplots(2)
-
-for n in tap_counts:
-    coeffs = sps.remez(n,
+# Add the filters to compare
+for taps in [15, 16, 17]:
+    coeffs = sps.remez(taps,
                        [0.0, 2.15e6, 4.6e6, rate / 2],
                        [1.0,         0.0],
                        [1.0,         1.0],
                        fs=rate)
+    filters.append(Filter('remez', coeffs))
 
-    print(n, coeffs)
+fig, (linax, logax) = plt.subplots(2)
 
-    w, h = sps.freqz(coeffs, fs=rate)
+for fil in filters:
+    print('%s <%d> = {' % (fil.name, len(fil.coeffs)))
+    for i in range(0, len(fil.coeffs), 5):
+        print('    ', ' '.join(str(c) + ',' for c in fil.coeffs[i:i+5]))
+    print('};')
+
+    w, h = sps.freqz(fil.coeffs, fs=rate)
     linax.plot(w, np.abs(h))
     logax.plot(w, 20 * np.log10(np.abs(h)))
 
 for ax in (linax, logax):
-    ax.legend(["%d taps" % n for n in tap_counts])
+    ax.legend(['%s <%d>' % (fil.name, len(fil.coeffs)) for fil in filters])
     ax.set_xlabel('Frequency')
     ax.set_xlim(0, rate / 2)
     ax.grid(True)
