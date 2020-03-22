@@ -859,7 +859,10 @@ run_test () {
 		;;
 	bbc-newpat-*)
 		decoder=$(echo "$testname" | sed 's/.*-//')
-		decode pal "$ATSDATA/BBC/newpat_pm.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 5
+		# This is newpat_pm.tbc with the first 16 fields repeated to
+		# give 256 fields, so there's enough headroom to get
+		# transform3d going properly at both ends.
+		decode pal "$ATSDATA/BBC/newpat_pm_x16.tbc" --nogain --decoder "$decoder" --aspect 16:9 --stillframe 60 -s 8 -l 120
 		;;
 	bbc-newpatcirc-*)
 		decoder=$(echo "$testname" | sed 's/.*-//')
