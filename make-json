@@ -16,6 +16,19 @@ options, args = parser.parse_args(sys.argv[1:])
 # Subcarrier frequency in Hz
 fSC = 4433618.75
 
+# Working out activeVideoStart/End:
+#
+# The active area should be 922 samples wide, for 4:3 aspect ratio against 575
+# vertical lines.
+#
+# The first sample in the .tbc is the left edge (not the middle) of the field 1
+# line 1 sync pulse -- sample 955 going by EBU Tech 3280's numbering -- so 0H
+# occurs 2.5 samples into the .tbc. The "digital active line" therefore starts
+# at sample 1135-955 = 180 and ends at 180+948 = 1128.
+#
+# Drop (948-922)/2 = 13 samples on either side, and the active region on line 1
+# is 193 to 1115.
+
 # Parameters we're trying to generate (based upon ld-decode output)
 videoParameters = {
     "sampleRate": fSC * 4,
@@ -28,10 +41,10 @@ videoParameters = {
 
     "fieldWidth": 1135,
     "fieldHeight": 313,
-    "colourBurstStart": 98.0,
-    "colourBurstEnd": 138.0,
-    "activeVideoStart": 185.0,
-    "activeVideoEnd": 1107.0,
+    "colourBurstStart": 104.0,
+    "colourBurstEnd": 144.0,
+    "activeVideoStart": 193.0,
+    "activeVideoEnd": 1115.0,
 
     "numberOfSequentialFields": 0, # We'll fill this in later
     }
