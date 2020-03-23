@@ -256,8 +256,16 @@ decode () {
 	fi
 	if ! grep -q getThresholdsSize "$ldddir/tools/ld-chroma-decoder/palcolour.h"; then
 		case "$usedecoder" in
-		transform*f)
+		transform*f*)
 			echo >&2 "Test skipped because no Transform threshold file support: $testname"
+			return
+			;;
+		esac
+	fi
+	if ! grep -q simplePAL "$ldddir/tools/ld-chroma-decoder/palcolour.h"; then
+		case "$usedecoder" in
+		pal*s|transform*s)
+			echo >&2 "Test skipped because no Simple PAL support: $testname"
 			return
 			;;
 		esac
@@ -347,6 +355,11 @@ decode () {
 	else
 		decoder="$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder"
 		if [ -n "$usedecoder" ]; then
+			case "$usedecoder" in
+			pal*s|transform*s)
+				decoder="$decoder --simple-pal"
+				usedecoder=$(echo "$usedecoder" | sed 's/s$//')
+			esac
 			case "$usedecoder" in
 			transform3df)
 				decoder="$decoder --transform-thresholds $testsuitedir/transform3d.thresholds"
@@ -530,6 +543,7 @@ all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
 	snellwilcox-n3d nr-vbar-n3d 3dmap1 3dmap2 3dmap3 \
+	testcardg-t3ds \
 	testcardg-mono snellwilcox-mono \
 	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
@@ -691,6 +705,11 @@ run_test () {
 		;;
 	pr-sweep-t3df)
 		decode pal "$GGV1011" --frame 14301 --decoder transform3df -l 1
+		;;
+
+	# Simple PAL
+	testcardg-t3ds)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3ds -l 1
 		;;
 
 	# mono decoder
