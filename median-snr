@@ -1,20 +1,23 @@
 #!/usr/bin/python3
-# Given an ld-decode .tbc.json file, print the median black SNR.
-# Usage: median-snr JSON
+# Given ld-decode .tbc.json files, print the median black SNR for each.
+# Usage: median-snr JSON [...]
 
 import json
 import statistics
 import sys
 
-with open(sys.argv[1], "r") as f:
-    data = json.load(f)
+for filename in sys.argv[1:]:
+    with open(filename, "r") as f:
+        data = json.load(f)
 
-snrs = []
-for field in data["fields"]:
-    metrics = field.get("vitsMetrics")
-    if metrics is not None:
-        bsnr = metrics.get("bPSNR")
-        if bsnr is not None:
-            snrs.append(float(bsnr))
+    snrs = []
+    for field in data["fields"]:
+        metrics = field.get("vitsMetrics")
+        if metrics is not None:
+            bsnr = metrics.get("bPSNR")
+            if bsnr is not None:
+                snrs.append(float(bsnr))
 
-print(statistics.median(snrs))
+    if len(sys.argv[1:]) > 1:
+        print(filename, end=': ')
+    print(statistics.median(snrs))
