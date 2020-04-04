@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+# Given a PAL .tbc file, repeat it N times. Trim the end of the part being
+# repeating to a multiple of 8 fields to keep the PAL sequence intact.
+#
+# Usage: repeat-tbc input.tbc output.tbc N
+
+import optparse
+import os
+import sys
+
+# Parse command-line options
+parser = optparse.OptionParser(usage="usage: %prog [options] TBC-IN-FILE TBC-OUT-FILE REPS")
+options, args = parser.parse_args(sys.argv[1:])
+
+if len(args) != 3:
+    parser.error("wrong number of args")
+
+input_tbc = args[0]
+output_tbc = args[1]
+reps = int(args[2])
+
+with open(input_tbc, "rb") as fin:
+    # Measure the length of the video
+    input_len = os.fstat(fin.fileno()).st_size
+    field_size = 2 * 313 * 1135
+    num_fields = input_len // field_size
+    if (input_len % field_size) != 0:
+        print("TBC length", input_len, "is not a multiple of field size",
+              field_size, file=sys.stderr)
+        sys.exit(1)
+
+    # Trim to keep the PAL sequence intact
+    dup_fields = (num_fields // 8) * 8
+    print("Repeating", dup_fields, "fields of", num_fields, "to give", dup_fields * reps)
+
+    with open(output_tbc, "wb") as fout:
+        for i in range(reps):
+            fin.seek(0)
+            for j in range(dup_fields):
+                data = fin.read(field_size)
+                fout.write(data)
