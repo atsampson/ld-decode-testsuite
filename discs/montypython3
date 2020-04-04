@@ -1,0 +1,10 @@
+#!/bin/sh
+# Monty Python series 2 discs (BBC PAL release)
+
+./stack-tbcs out/MontyPython2x08-10set*side1*tbc | \
+	ld-chroma-decoder -f transform3d --transform-thresholds /home/ats/src/ld-decode-testsuite/transform3d.thresholds --input-json out/MontyPython2x08-10set1_CLV_PAL_ANA_side1_4400_2019-08-24_18-40-31.tbc.json - - | \
+	ffmpeg -f rawvideo -pix_fmt rgb48 -r 25 -s 928x576 -i - -i out/MontyPython2x08-10set1_CLV_PAL_ANA_side1_4400_2019-08-24_18-40-31.analogue.flac -i out/MontyPython2x08-10set1_CLV_PAL_ANA_side1_4400_2019-08-24_18-40-31.ffmetadata -map 0:0 -map 1:0 -map_metadata 1 -filter:v setfield=tff,bwdif -pix_fmt yuvj444p -codec:v libx264 -crf 0 -aspect 4:3 -codec:a:0 copy -y out/MontyPython2x08-10_side1_stack.mkv
+
+./stack-tbcs out/MontyPython2x08-10set*side2*tbc | \
+	ld-chroma-decoder -f transform3d --transform-thresholds /home/ats/src/ld-decode-testsuite/transform3d.thresholds --input-json out/MontyPython2x08-10set1*side2*.tbc.json - - | \
+	ffmpeg -f rawvideo -pix_fmt rgb48 -r 25 -s 928x576 -i - -i out/MontyPython2x08-10set1*side2*.analogue.flac -i out/MontyPython2x08-10set1*side2*.ffmetadata -map 0:0 -map 1:0 -map_metadata 1 -filter:v setfield=tff,bwdif -pix_fmt yuvj444p -codec:v libx264 -crf 0 -aspect 4:3 -codec:a:0 copy -y out/MontyPython2x08-10_side2_stack.mkv
