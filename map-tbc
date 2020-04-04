@@ -103,17 +103,20 @@ def map_json(in_json):
     # Build the output JSON
     out_json = in_json.copy()
     out_json['fields'] = []
+    prev_burst = in_json['fields'][0]['medianBurstIRE']
     for seq, field in enumerate(out_fields):
         if field.index is None:
             # Blank field
             field_json = {
                 'pad': True,
+                'medianBurstIRE': prev_burst,
                 # The first field in a TBC always has isFirstField: True
                 'isFirstField': (seq % 2) == 0,
                 }
         else:
             field_json = in_json['fields'][field.index].copy()
             field_json['mappedSeqNo'] = field_json['seqNo']
+            prev_burst = field_json['medianBurstIRE']
 
         field_json['seqNo'] = seq + 1
         out_json['fields'].append(field_json)
