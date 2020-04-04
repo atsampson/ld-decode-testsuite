@@ -281,9 +281,6 @@ if [ ! -f "$out.mkv" ]; then
 	if [ -n "$decoder" ]; then
 		chcmd+=(-f "$decoder")
 	fi
-	if [ "$decoder" = "transform3d" ]; then
-		chcmd+=(--transform-thresholds "$testsuitedir/transform3d.thresholds")
-	fi
 	chcmd+=(--input-json "$prevtbc.json" - -)
 
 	ffcmd=(ffmpeg -f rawvideo -pix_fmt rgb48)
