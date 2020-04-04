@@ -1,0 +1,128 @@
+#!/usr/bin/python3
+# Science Museum - Optics Exhibition - Lasers
+# I have three copies of this, each of which has the same content on both sides.
+
+import glob
+import os
+import shutil
+import subprocess
+import sys
+
+def show_command(cmd):
+    print('Running:', ' '.join(cmd), file=sys.stderr)
+
+def command(cmd):
+    show_command(cmd)
+    subprocess.check_call(cmd)
+
+def built(target, *srcs):
+    """Check a make-style dependency: return True if target exists and none of
+    srcs (which must all exist) has a newer mtime than target."""
+
+    try:
+        target_st = os.stat(target)
+    except FileNotFoundError:
+        return False
+
+    for src in srcs:
+        try:
+            src_st = os.stat(src)
+        except FileNotFoundError:
+            print("Source missing:", src, file=sys.stderr)
+            sys.exit(1)
+
+        if src_st.st_mtime > target_st.st_mtime:
+            return False
+
+    return True
+
+tbcs = []
+mapped_jsons = []
+for tbc in sorted(glob.glob('/n/stuff2/capture/laserdisc/out/ScienceMuseum-Lasers_copy*.tbc')):
+    base = tbc[:-4]
+    print('Source:', base)
+
+    mapped_json = base + '.mapped.json'
+    if not built(mapped_json, './map-tbc', tbc):
+        command(['./map-tbc', '--output-json', mapped_json, tbc])
+
+    tbcs.append(tbc)
+    mapped_jsons.append(mapped_json)
+
+# command(['./compare-tbcs'] + mapped_jsons)
+
+procs = set()
+doc_pipes = []
+for tbc, mapped_json in zip(tbcs, mapped_jsons):
+    cmd = ['./map-tbc', tbc, '-']
+    show_command(cmd)
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    procs.add(p1)
+
+    # XXX ld-dropout-correct can't handle - - at the moment
+    if False:
+        cmd = [
+            'ld-dropout-correct',
+            '--input-json', mapped_json,
+            '--output-json', '/dev/null',
+            '--overcorrect',
+            '-', '-',
+            ]
+        show_command(cmd)
+        p2 = subprocess.Popen(cmd, stdin=p1.stdout, stdout=subprocess.PIPE)
+        procs.add(p2)
+        doc_pipes.append(p2.stdout)
+    else:
+        doc_pipes.append(p1.stdout)
+
+tbc_format = ['-f', 'rawvideo', '-pix_fmt', 'gray16', '-s', '1135x626', '-r', '25']
+cmd = ['ffmpeg']
+for pipe in doc_pipes:
+    cmd += tbc_format
+    os.set_inheritable(pipe.fileno(), True)
+    cmd += ['-i', '/dev/fd/%d' % pipe.fileno()]
+cmd += ['-filter_complex', 'xmedian=inputs=%d' % len(doc_pipes)]
+cmd += tbc_format
+cmd += ['-']
+show_command(cmd)
+p3 = subprocess.Popen(cmd, close_fds=False, stdout=subprocess.PIPE)
+procs.add(p3)
+
+if False:
+    cmd = [
+        'ld-chroma-decoder',
+        '-f', 'transform3d',
+        '--input-json', mapped_jsons[0],
+        '-', '-',
+        ]
+    p4 = subprocess.Popen(cmd, stdin=p3.stdout, stdout=subprocess.PIPE)
+    procs.add(p4)
+
+    cmd = [
+        'ffmpeg',
+        '-f', 'rawvideo', '-pix_fmt', 'rgb48', '-r', '25', '-s', '928x576',
+        '-i', '-',
+        # XXX add audio too
+        '-filter:v', 'setfield=tff,pullup',
+        '-pix_fmt', 'yuv420p',  # not yuvj444p
+        '-codec:v', 'libx264',
+        '-crf', '16',
+        '-profile:v', 'main',
+        '-aspect', '4:3',  # XXX crop to 922
+        '-y',
+        '/d/extra/laserdisc/out/ScienceMuseum-Lasers-combined.mkv',
+        ]
+    p5 = subprocess.Popen(cmd, stdin=p4.stdout)
+    procs.add(p5)
+else:
+    out_tbc = '/d/extra/laserdisc/out/ScienceMuseum-Lasers-combined.tbc'
+    shutil.copy(mapped_jsons[0], out_tbc + '.json')
+    with open(out_tbc, 'wb') as f:
+        while True:
+            data = p3.stdout.read(1024 * 1024)
+            if data == b"":
+                break
+            f.write(data)
+
+for p in procs:
+    p.wait()
