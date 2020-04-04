@@ -1,0 +1,180 @@
+#!/usr/bin/python3
+# An experiment: do roughly the same as ld-discmap, but based on fields rather
+# than frames, and with support for piped output. At present this only supports
+# non-pulldown CAV.
+
+import argparse
+import collections
+import json
+import sys
+
+Field = collections.namedtuple('Field', ['index', 'numbered', 'frame', 'field'])
+
+def warn(*s):
+    print(*s, file=sys.stderr)
+
+def map_json(in_json):
+    good_fields = []
+
+    # If the first field isn't the start of a frame, we will have one or more
+    # initial fields before we know what their frame number should be. We'll
+    # fix this later.
+    cur_frame = None
+    cur_field = 0
+    first_frame = None
+
+    # Scan through the input fields, and discard any that may contain skips
+    for index, field in enumerate(in_json['fields']):
+        # XXX check isFirstField alternates
+
+        # XXX look at multiple VBI lines directly - there may be more than one number
+        # XXX CLV support - see ld-discmap for special rule for CLV frame counting
+        # XXX look at VITC
+        frame = field.get('frameNumber')
+
+        if frame is not None:
+            # Numbered field
+
+            if cur_frame is None:
+                first_frame = frame
+
+            # But does it have the number we were expecting?
+            # XXX check cur_field < 3 (or < 2 for PAL)
+            if cur_frame is not None and frame != cur_frame + 1:
+                # No. So a skip has occurred at some point since the last
+                # numbered field. We don't know *where* the skip was (it could
+                # have been right after the VBI line with the number), so
+                # discard up to and including the last numbered field.
+                while good_fields != []:
+                    dropped = good_fields.pop()
+                    warn('Dropped skip field:', dropped)
+                    if dropped.numbered:
+                        break
+
+            cur_frame = frame
+            cur_field = 0
+            numbered = True
+
+        else:
+            # Unnumbered field
+            cur_field += 1
+            numbered = False
+
+        good_fields.append(Field(index, numbered, cur_frame, cur_field))
+
+    # Fill in a (guessed) frame number for any unnumbered fields at the start
+    for index, field in enumerate(good_fields):
+        if field.frame is not None:
+            break
+        good_fields[index] = Field(field.index, field.numbered, first_frame - 1, field.field)
+
+    # good_fields now contains only fields that we're reasonably confident are
+    # complete. Sort them into order, in case we jumped backwards at any point.
+    good_fields.sort(key=lambda field: (field.frame, field.field, field.index))
+
+    # Scan through the sorted output fields, inserting blank fields to complete the sequence
+    out_fields = [good_fields[0]]
+    for field in good_fields[1:]:
+        while True:
+            prev_field = out_fields[-1]
+            expect_frame = prev_field.frame
+            expect_field = prev_field.field + 1
+            if expect_field >= 2:
+                # Once we get past 2 fields, we expect to see the next frame,
+                # but we'll accept more fields as well (if the code above let
+                # them through).
+                expect_frame += 1
+                expect_field = 0
+
+            if (field.frame, field.field) == (prev_field.frame, prev_field.field):
+                # This is a duplicate field. Drop the older version.
+                dropped = out_fields.pop()
+                warn('Dropped duplicate field:', dropped)
+            elif (field.frame, field.field) > (expect_frame, expect_field):
+                # This is later than the field we're expecting. Insert a blank field.
+                out_fields.append(Field(None, False, expect_frame, expect_field))
+                warn('Inserted blank field:', out_fields[-1])
+            else:
+                # Either the field we're expecting, or an extra field preceding it.
+                break
+
+        out_fields.append(field)
+
+    # Build the output JSON
+    out_json = in_json.copy()
+    out_json['fields'] = []
+    for seq, field in enumerate(out_fields):
+        if field.index is None:
+            # Blank field
+            field_json = {
+                'pad': True,
+                # The first field in a TBC always has isFirstField: True
+                'isFirstField': (seq % 2) == 0,
+                }
+        else:
+            field_json = in_json['fields'][field.index].copy()
+            field_json['mappedSeqNo'] = field_json['seqNo']
+
+        field_json['seqNo'] = seq + 1
+        out_json['fields'].append(field_json)
+    out_json['videoParameters']['numberOfSequentialFields'] = len(out_json['fields'])
+    return out_json
+
+def map_tbc(out_json, fin, fout):
+    video_params = out_json['videoParameters']
+    field_bytes = 2 * video_params['fieldWidth'] * video_params['fieldHeight']
+
+    # Blank fields are at black level
+    blank_field = b'\x00\x40' * (field_bytes // 2)
+
+    for index, field in enumerate(out_json['fields']):
+        if (index % 1000) == 0:
+            warn('Writing field', index, 'of', len(out_json['fields']))
+
+        if field.get('pad'):
+            fout.write(blank_field)
+        else:
+            fin.seek(field_bytes * (field['mappedSeqNo'] - 1))
+            data = fin.read(field_bytes)
+            assert len(data) == field_bytes
+            fout.write(data)
+
+def main():
+    # Parse command-line options
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-json', type=str, help='Input JSON file (default input.json)')
+    parser.add_argument('--output-json', type=str, help='Output JSON file (default output.json)')
+    parser.add_argument('input', type=str, help='Input TBC file')
+    parser.add_argument('output', type=str, nargs='?', help='Output TBC file (default none; - for piped output)')
+    args = parser.parse_args()
+
+    if args.input_json is None:
+        args.input_json = args.input + '.json'
+    if args.output_json is None and args.output not in (None, '-'):
+        args.output_json = args.output + '.json'
+    if args.output is None and args.output_json is None:
+        parser.error('No output requested; nothing to do')
+
+    with open(args.input_json) as f:
+        in_json = json.load(f)
+
+    out_json = map_json(in_json)
+
+    if args.output_json is not None:
+        with open(args.output_json, 'w') as f:
+            json.dump(out_json, f, indent=2)
+
+    if args.output is not None:
+        with open(args.input, 'rb') as fin:
+            if args.output == '-':
+                fout = sys.stdout.buffer
+            else:
+                fout = open(args.output, 'wb')
+
+            map_tbc(out_json, fin, fout)
+
+            if fout is not sys.stdout.buffer:
+                fout.close()
+
+if __name__ == '__main__':
+    main()
