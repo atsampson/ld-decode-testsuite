@@ -1,0 +1,28 @@
+#!/usr/bin/python3
+# Given a set of .tbc.json files that are copies of the same source, show some
+# statistics about them.
+
+import json
+import sys
+
+good_field_counts = {}
+
+for filename in sys.argv[1:]:
+    with open(filename) as f:
+        tbcjson = json.load(f)
+
+    print(filename, 'has', len(tbcjson['fields']), 'fields')
+
+    for field in tbcjson['fields']:
+        num = field['seqNo']
+
+        if 'pad' not in field:
+            good_field_counts[num] = good_field_counts.get(num, 0) + 1
+
+hist = {}
+for num, count in good_field_counts.items():
+    hist[count] = hist.get(count, 0) + 1
+print('\nNumber of good copies per field:')
+print('%6s %6s' % ('Good', 'Count'))
+for num, count in sorted(hist.items()):
+    print('%6d %6d' % (num, count))
