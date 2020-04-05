@@ -25,7 +25,7 @@ for taps in [15, 16, 17]:
                        fs=rate)
     filters.append(Filter('remez', coeffs))
 
-fig, (linax, logax) = plt.subplots(2)
+fig, (linax, logax, grpax) = plt.subplots(3)
 
 for fil in filters:
     print('%s <%d> = {' % (fil.name, len(fil.coeffs)))
@@ -36,13 +36,16 @@ for fil in filters:
     w, h = sps.freqz(fil.coeffs, fs=rate)
     linax.plot(w, np.abs(h))
     logax.plot(w, 20 * np.log10(np.abs(h)))
+    dw, d = sps.group_delay((fil.coeffs, 1), w, fs=rate)
+    grpax.plot(dw, d)
 
-for ax in (linax, logax):
+for ax in (linax, logax, grpax):
     ax.legend(['%s <%d>' % (fil.name, len(fil.coeffs)) for fil in filters])
     ax.set_xlabel('Frequency')
     ax.set_xlim(0, rate / 2)
     ax.grid(True)
 linax.set_ylabel('Magnitude response (linear)')
 logax.set_ylabel('Magnitude response (dB)')
+grpax.set_ylabel('Group delay (samples)')
 
 plt.show()
