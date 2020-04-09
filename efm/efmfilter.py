@@ -203,6 +203,7 @@ class VideoEqualiser(EFMEqualiser):
     """Frequency-domain equalisation filter for TBC video."""
 
     def __init__(self):
+        # XXX This is wrong because we haven't set the sample rate!
         # Frequency bands
         self.freqs = np.linspace(0.0e6, 15e6, num=4)
 

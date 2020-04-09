@@ -13,7 +13,7 @@ import sys
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
-from efmfilter import SAMPLE_RATE, FFTFilter, VideoEqualiser
+from efmfilter import FFTFilter, VideoEqualiser
 
 class InputFile:
     """A TBC file that can be viewed."""
