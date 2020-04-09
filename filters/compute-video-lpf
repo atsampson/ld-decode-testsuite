@@ -9,16 +9,6 @@ from showfilter import Filter, Ideal, show_filters
 
 fs = 40e6
 
-# The IEC Laserdisc spec doesn't describe the video frequency response, but it
-# says the group delay for the LPF should be... (Hz, seconds)
-ntsc_spec_delay = Ideal('IEC NTSC spec',
-                        np.array([0.5e6, 2e6, 3e6, 3.58e6, 4e6, 4.2e6]),
-                        np.array([0, 15e-9, 45e-9, 80e-9, 135e-9, 200e-9]) * fs)
-pal_spec_delay = Ideal('IEC PAL spec',
-                       np.array([0.5e6, 2e6, 3e6, 4e6, 4.43e6, 4.8e6]),
-                       np.array([0, 10e-9, 35e-9, 85e-9, 135e-9, 200e-9]) * fs)
-# So it looks like they're expecting an elliptic LPF.
-
 filters = []
 
 b, a = sps.butter(6, 4500000, fs=fs)
@@ -27,12 +17,58 @@ filters.append(Filter('orig NTSC LPF', b, a))
 b, a = sps.butter(7, 4800000, fs=fs)
 filters.append(Filter('orig PAL LPF', b, a))
 
-# This filter doesn't seem to translate properly to FFT form...
-freq = 5.5e6
-trans = 0.5e6
-coeffs = sps.remez(151, [0.0, freq-(trans/2), freq+(trans/2), fs/2],
-                   [1.0, 0.0], [1.0, 1.0], fs=fs)
-filters.append(Filter('remez', coeffs))
+# The IEC Laserdisc spec doesn't describe the video frequency response, but it
+# says the group delay for the LPF should be... (Hz, seconds)
+ntsc_spec_delay = Ideal('IEC NTSC spec',
+                        np.array([0.5e6, 2e6, 3e6, 3.58e6, 4e6, 4.2e6]),
+                        np.array([0, 15e-9, 45e-9, 80e-9, 135e-9, 200e-9]) * fs,
+                        np.array([0, 15e-9, 15e-9, 15e-9, 30e-9, 50e-9]) * fs)
+pal_spec_delay = Ideal('IEC PAL spec',
+                       np.array([0.5e6, 2e6, 3e6, 4e6, 4.43e6, 4.8e6]),
+                       np.array([0, 10e-9, 35e-9, 85e-9, 135e-9, 200e-9]) * fs,
+                       np.array([0, 15e-9, 15e-9, 20e-9, 20e-9, 50e-9]) * fs)
+# So it looks like they're expecting an elliptic LPF.
+
+if False:
+    # Find an elliptic filter with a group delay curve that minimises RMS error vs the spec.
+    # PAL is around: ellip(N=7, rp=0.04, rs=53.0, Wn=5.3e6)
+    # NTSC is around: ellip(N=5, rp=0.09, rs=40.0, Wn=4.35e6)
+    #  ellip(N=5, rp=0.13, rs=47.5, Wn=4.350000e+06)
+    #spec = pal_spec_delay
+    spec = ntsc_spec_delay
+    best = []
+    for N in range(5, 9):
+        for rp in np.arange(0.01, 0.51, 0.05): #np.arange(0.01, 0.16, 0.01):
+            print(N, rp)
+            for rs in np.arange(60, 68, 2.5):
+                #for Wn in np.arange(4.9e6, 6.11e6, 0.05e6): # PAL
+                for Wn in np.arange(4.0e6, 4.81e6, 0.05e6): # NTSC
+                    b, a = sps.ellip(N, rp, rs, Wn, fs=fs)
+
+                    fil = Filter('ellip(N=%d, rp=%.2f, rs=%.1f, Wn=%e)' % (N, rp, rs, Wn), b, a)
+
+                    dw, d = sps.group_delay((fil.b, fil.a), spec.fs, fs=fs)
+                    d -= d[0]
+                    rms = np.sqrt(np.mean((d - spec.vs) ** 2))
+                    best.append((rms, fil))
+
+    best.sort()
+    for rms, fil in best[:20]:
+        print('%10f %s' % (rms, fil.name))
+
+    #sys.exit(0)
+    for rms, fil in best[:5]:
+        filters.append(fil)
+
+if True:
+    b, a = sps.ellip(N=7, rp=0.04, rs=53.0, Wn=5.3e6, fs=fs)
+    filters.append(Filter('PAL ellip', b, a))
+    b, a = sps.ellip(N=5, rp=0.09, rs=40.0, Wn=4.35e6, fs=fs)
+    filters.append(Filter('NTSC ellip', b, a))
+    #b, a = sps.ellip(N=5, rp=0.13, rs=47.5, Wn=4.350000e+06, fs=fs)
+    #filters.append(Filter('Alt NTSC ellip', b, a))
+    #b, a = sps.ellip(N=5, rp=0.16, rs=62.5, Wn=4.300000e+06, fs=fs)
+    #filters.append(Filter('Alt2 NTSC ellip', b, a))
 
 def fir_from_fft(fir_size, freq, trans, fs, window='hamming'):
     # Ref: "The Scientist and Engineer's Guide to DSP", ch17 p299
@@ -60,6 +96,9 @@ for window in ('hamming', 'blackman'):
     for size in (31, 63):
         for cutoff in (5.5e6,):
             b = fir_from_fft(size, cutoff, 1.0e6, fs=fs, window=window)
-            filters.append(Filter('from FFT ' + str(cutoff) + ' ' + str(window), b))
+            #filters.append(Filter('from FFT ' + str(cutoff) + ' ' + str(window), b))
 
-show_filters(filters, fs=fs, ideal_delays=[ntsc_spec_delay, pal_spec_delay])
+show_filters(filters, fs=fs, ideal_delays=[
+    ntsc_spec_delay,
+    pal_spec_delay,
+])
