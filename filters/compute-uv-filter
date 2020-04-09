@@ -1,0 +1,27 @@
+#!/usr/bin/python3
+# Compute and display the response of a FIR UV postfilter for Transform PAL.
+#
+# Richard Russell provided the parameters below from paldecc.fir, along with
+# the response computed by FIRBBC (which matches what this produces, since it
+# uses the same algorithm as sps.remez).
+
+import numpy as np
+import numpy.fft as npfft
+import scipy.signal as sps
+
+from showfilter import Filter, show_filters
+
+fSC = 4433618.75
+fs = 4 * fSC
+
+filters = []
+
+for taps in [15, 16, 17]:
+    coeffs = sps.remez(taps,
+                       [0.0, 2.15e6, 4.6e6, fs / 2],
+                       [1.0,         0.0],
+                       [1.0,         1.0],
+                       fs=fs)
+    filters.append(Filter('remez', coeffs))
+
+show_filters(filters, fs=fs)
