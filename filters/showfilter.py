@@ -3,12 +3,14 @@
 
 import collections
 import numpy as np
+import scipy.interpolate as sint
 import scipy.signal as sps
 import matplotlib.pyplot as plt
 
 Filter = collections.namedtuple('Filter', ['name', 'b', 'a'],
                                 defaults=[[1.0]])
-Ideal = collections.namedtuple('Ideal', ['name', 'fs', 'vs'])
+Ideal = collections.namedtuple('Ideal', ['name', 'fs', 'vs', 'tols'],
+                               defaults=[None])
 
 def print_filter(fil):
     def consts(nums):
@@ -39,7 +41,12 @@ def show_filters(filters, fs, ideal_delays=[]):
         grpax.plot(dw, d - d[0])
 
     for ideal in ideal_delays:
-        grpax.plot(ideal.fs, ideal.vs, '--')
+        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=1000)
+        vs_interp = sint.interp1d(ideal.fs, ideal.vs, kind='quadratic')(xs)
+        grpax.plot(ideal.fs, ideal.vs, 'o')
+        if ideal.tols is not None:
+            tols_interp = sint.interp1d(ideal.fs, ideal.tols, kind='quadratic')(xs)
+            grpax.fill_between(xs, vs_interp - tols_interp, vs_interp + tols_interp, alpha=0.2)
 
     for ax in (linax, logax, grpax):
         if ax is grpax:
