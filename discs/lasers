@@ -2,6 +2,14 @@
 # Science Museum - Optics Exhibition - Lasers
 # I have three copies of this, each of which has the same content on both sides.
 
+"""
+ld-chroma-decoder -f transform3d ScienceMuseum-Lasers-combined.tbc - | ffmpeg -f rawvideo -pix_fmt rgb48 -r 25 -s 928x576 -i - -i ScienceMuseum-Lasers-combined.analogue.flac -i ScienceMuseum-Lasers-combined.ffmetadata -map 0:0 -map 1:0 -map_metadata 1 -filter:v crop=922:576,setdar=4/3,setfield=tff,bwdif -pix_fmt yuv420p -profile:v main -codec:v libx264 -crf 12 -codec:a:0 copy -y ScienceMuseum-Lasers-combined_v1.mkv
+
+ld-chroma-decoder -f transform3d --chroma-gain 1.0 --transform-threshold 0.2 ScienceMuseum-Lasers-combined.tbc - | ffmpeg -f rawvideo -pix_fmt rgb48 -r 25 -s 928x576 -i - -i ScienceMuseum-Lasers-combined.analogue.flac -i ScienceMuseum-Lasers-combined.ffmetadata -map 0:0 -map 1:0 -map_metadata 1 -filter:v crop=922:576,setdar=4/3,setfield=tff,bwdif -pix_fmt yuv420p -profile:v main -codec:v libx264 -crf 12 -codec:a:0 copy -y ScienceMuseum-Lasers-combined_v2.mkv
+
+size=$(python -c 'print 1135*313*2*2*25*120'); head -c $size /d/extra/laserdisc/out/ScienceMuseum-Lasers-combined.tbc | pv -s $size | efm/equalise-tbc >/d/extra/laserdisc/out/ScienceMuseum-Lasers-combined-eq.tbc
+"""
+
 import glob
 import os
 import shutil
