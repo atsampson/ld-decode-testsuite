@@ -115,7 +115,7 @@ class GUI:
         self.amp_scales = []
         for i, freq in enumerate(self.eq.freqs):
             scale = add_scale("Amplitude %.1f MHz" % (freq / 1.0e6))
-            scale.set_range(0.0, 1.5)
+            scale.set_range(0.0, 3.0)
             scale.set_value(self.eq.amp[i])
             scale.set_digits(2)
             scale.connect("value-changed", self.eq_changed)
