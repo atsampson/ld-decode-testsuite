@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 Filter = collections.namedtuple('Filter', ['name', 'b', 'a'],
                                 defaults=[[1.0]])
+Ideal = collections.namedtuple('Ideal', ['name', 'fs', 'vs'])
 
 def print_filter(fil):
     def consts(nums):
@@ -25,7 +26,7 @@ def print_filter(fil):
         consts(fil.a)
         print('};')
 
-def show_filters(filters, fs):
+def show_filters(filters, fs, ideal_delays=[]):
     fig, (linax, logax, grpax) = plt.subplots(3)
 
     for fil in filters:
@@ -37,8 +38,15 @@ def show_filters(filters, fs):
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
         grpax.plot(dw, d)
 
+    for ideal in ideal_delays:
+        grpax.plot(ideal.fs, ideal.vs, '--')
+
     for ax in (linax, logax, grpax):
-        ax.legend(['%s <%d>' % (fil.name, len(fil.b)) for fil in filters])
+        if ax is grpax:
+            extras = [ideal.name for ideal in ideal_delays]
+        else:
+            extras = []
+        ax.legend(['%s <%d>' % (fil.name, len(fil.b)) for fil in filters] + extras)
         ax.set_xlabel('Frequency')
         ax.set_xlim(0, fs / 2)
         ax.grid(True)

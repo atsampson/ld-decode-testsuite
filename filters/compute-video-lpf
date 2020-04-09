@@ -5,9 +5,19 @@ import numpy as np
 import numpy.fft as npfft
 import scipy.signal as sps
 
-from showfilter import Filter, show_filters
+from showfilter import Filter, Ideal, show_filters
 
 fs = 40e6
+
+# The IEC Laserdisc spec doesn't describe the video frequency response, but it
+# says the group delay for the LPF should be... (Hz, seconds)
+ntsc_spec_delay = Ideal('IEC NTSC spec',
+                        np.array([0.5e6, 2e6, 3e6, 3.58e6, 4e6, 4.2e6]),
+                        np.array([0, 15e-9, 45e-9, 80e-9, 135e-9, 200e-9]) * fs)
+pal_spec_delay = Ideal('IEC PAL spec',
+                       np.array([0.5e6, 2e6, 3e6, 4e6, 4.43e6, 4.8e6]),
+                       np.array([0, 10e-9, 35e-9, 85e-9, 135e-9, 200e-9]) * fs)
+# So it looks like they're expecting an elliptic LPF.
 
 filters = []
 
@@ -52,4 +62,4 @@ for window in ('hamming', 'blackman'):
             b = fir_from_fft(size, cutoff, 1.0e6, fs=fs, window=window)
             filters.append(Filter('from FFT ' + str(cutoff) + ' ' + str(window), b))
 
-show_filters(filters, fs=fs)
+show_filters(filters, fs=fs, ideal_delays=[ntsc_spec_delay, pal_spec_delay])
