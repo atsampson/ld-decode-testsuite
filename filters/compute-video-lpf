@@ -1,0 +1,55 @@
+#!/usr/bin/python3
+# Visualise video LPF for ld-decode.
+
+import numpy as np
+import numpy.fft as npfft
+import scipy.signal as sps
+
+from showfilter import Filter, show_filters
+
+fs = 40e6
+
+filters = []
+
+b, a = sps.butter(6, 4500000, fs=fs)
+filters.append(Filter('orig NTSC LPF', b, a))
+
+b, a = sps.butter(7, 4800000, fs=fs)
+filters.append(Filter('orig PAL LPF', b, a))
+
+# This filter doesn't seem to translate properly to FFT form...
+freq = 5.5e6
+trans = 0.5e6
+coeffs = sps.remez(151, [0.0, freq-(trans/2), freq+(trans/2), fs/2],
+                   [1.0, 0.0], [1.0, 1.0], fs=fs)
+filters.append(Filter('remez', coeffs))
+
+def fir_from_fft(fir_size, freq, trans, fs, window='hamming'):
+    # Ref: "The Scientist and Engineer's Guide to DSP", ch17 p299
+
+    fft_size = 1 << 16
+
+    freqs = np.linspace(0.0, fs / 2, (fft_size // 2) + 1)
+    left = freq - (trans / 2)
+    amps = np.clip(1.0 - ((freqs - left) / trans), 0.0, 1.0)
+
+    want_resp = np.zeros(fft_size, dtype=np.double)
+    want_resp[:len(amps)] = amps
+    want_resp[-(len(amps) - 1):] = np.flip(amps[1:])
+
+    # The imag values in the FFT should be 0.
+    impulse = npfft.ifft(want_resp).real
+
+    impulse = np.roll(impulse, fir_size // 2)
+    impulse = impulse[:fir_size] * sps.get_window(window, fir_size)
+    # XXX Also visulise the impulse response?
+    #print(list(impulse))
+    return impulse
+
+for window in ('hamming', 'blackman'):
+    for size in (31, 63):
+        for cutoff in (5.5e6,):
+            b = fir_from_fft(size, cutoff, 1.0e6, fs=fs, window=window)
+            filters.append(Filter('from FFT ' + str(cutoff) + ' ' + str(window), b))
+
+show_filters(filters, fs=fs)

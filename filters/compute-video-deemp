@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+# Visualise video deemphasis filters for ld-decode.
+# See: https://github.com/gnuradio/gnuradio/blob/master/gr-analog/python/analog/fm_emph.py
+
+import numpy as np
+import numpy.fft as npfft
+import scipy.signal as sps
+
+from showfilter import Filter, show_filters
+
+fs = 40e6
+
+filters = []
+
+deemp0, deemp1 = 120*.32, 320*.32
+[tf_b, tf_a] = sps.zpk2tf([-deemp1*(10**-10)], [-deemp0*(10**-10)], deemp0 / deemp1)
+b, a = sps.bilinear(tf_b, tf_a, 1.0/(fs/2))
+filters.append(Filter('orig NTSC deemp', b, a))
+
+deemp0, deemp1 = 100*.30, 400*.30
+[tf_b, tf_a] = sps.zpk2tf([-deemp1*(10**-10)], [-deemp0*(10**-10)], deemp0 / deemp1)
+b, a = sps.bilinear(tf_b, tf_a, 1.0/(fs/2))
+filters.append(Filter('orig PAL deemp', b, a))
+
+# This function is now in lddecode.utils
+def emphasis_iir(t1, t2, fs):
+    """Generate an IIR filter for 6dB/octave pre-emphasis (t1 > t2) or
+    de-emphasis (t1 < t2), given time constants for the two corners."""
+
+    # Convert time constants to frequencies, and pre-warp for bilinear mapping
+    w1 = 2 * fs * np.tan((1 / t1) / (2 * fs))
+    w2 = 2 * fs * np.tan((1 / t2) / (2 * fs))
+
+    # Zero at t1, pole at t2
+    tf_b, tf_a = sps.zpk2tf([-w1], [-w2], w2 / w1)
+    return sps.bilinear(tf_b, tf_a, fs)
+
+b, a = emphasis_iir(320e-9, 120e-9, fs=fs)
+filters.append(Filter('NTSC emp', b, a))
+
+b, a = emphasis_iir(120e-9, 320e-9, fs=fs)
+filters.append(Filter('NTSC de-emp', b, a))
+
+b, a = emphasis_iir(400e-9, 100e-9, fs=fs)
+filters.append(Filter('PAL emp', b, a))
+
+b, a = emphasis_iir(100e-9, 400e-9, fs=fs)
+filters.append(Filter('PAL de-emp', b, a))
+
+show_filters(filters, fs=fs)
