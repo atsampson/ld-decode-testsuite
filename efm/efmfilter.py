@@ -208,9 +208,8 @@ class VideoEqualiser(EFMEqualiser):
         self.freqs = np.linspace(0.0e6, 15e6, num=4)
 
         # Amplitude and phase adjustments for each band.
-        # These values were adjusted empirically based on a selection of NTSC and PAL samples.
-        self.amp = np.ones(len(self.freqs), np.float)
-        self.phase = np.zeros(len(self.freqs), np.float)
+        self.amp = np.array([1.0, 1.15, 1.3, 1.45])
+        self.phase = np.array([0.0, 0.25, 0.5, 0.75])
 
         self.coeffs = None
 
