@@ -36,7 +36,7 @@ def show_filters(filters, fs, ideal_delays=[]):
         linax.plot(w, np.abs(h))
         logax.plot(w, 20 * np.log10(np.abs(h)))
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
-        grpax.plot(dw, d)
+        grpax.plot(dw, d - d[0])
 
     for ideal in ideal_delays:
         grpax.plot(ideal.fs, ideal.vs, '--')
@@ -52,6 +52,6 @@ def show_filters(filters, fs, ideal_delays=[]):
         ax.grid(True)
     linax.set_ylabel('Magnitude response (linear)')
     logax.set_ylabel('Magnitude response (dB)')
-    grpax.set_ylabel('Group delay (samples)')
+    grpax.set_ylabel('Relative group delay (samples)')
 
     plt.show()
