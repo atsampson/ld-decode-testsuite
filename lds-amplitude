@@ -20,7 +20,7 @@ SPACING = int(10.0 * SAMPLE_RATE)
 CHUNK_SIZE = int(0.1 * SAMPLE_RATE)
 
 # RMS threshold for no signal
-RMS_QUIET = 500
+RMS_QUIET = 3000
 
 def scan(filename):
     with open(filename, "rb") as f:
