@@ -69,6 +69,8 @@ if True:
     #filters.append(Filter('Alt NTSC ellip', b, a))
     #b, a = sps.ellip(N=5, rp=0.16, rs=62.5, Wn=4.300000e+06, fs=fs)
     #filters.append(Filter('Alt2 NTSC ellip', b, a))
+    b, a = sps.ellip(N=7, rp=0.02, rs=100.0, Wn=5.3e6, fs=fs)
+    filters.append(Filter('PAL ellip 2', b, a))
 
 def fir_from_fft(fir_size, freq, trans, fs, window='hamming'):
     # Ref: "The Scientist and Engineer's Guide to DSP", ch17 p299
