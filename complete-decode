@@ -1,7 +1,6 @@
 #!/bin/bash -e
 # Run through the entire decoding process.
 
-# FIXME: Option to split analogue tracks
 # FIXME: Detect CX decoding automatically
 # FIXME: Detect audio configuration automatically from the VBI
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
@@ -18,6 +17,7 @@ Options:
   -A               Disc has no analogue audio
   -D               Disc has no digital audio
   -3               Disc has AC3 audio (and no right analogue channel)
+  -B               Disc has bilingual analogue audio (default stereo)
   -C               Don't use ld-dropout-correct
   -m               Use ld-discmap
   -V               Do everything except final encoding step
@@ -46,6 +46,8 @@ testsuitedir="$(dirname $(realpath $0))"
 
 ac3=false
 analogue=true
+analogueL=false
+analogueR=false
 digital=true
 dropouts=true
 x264crf=16
@@ -56,13 +58,21 @@ dryrun=false
 standard=ntsc
 lddargs=()
 noencode=false
-while getopts "3ACc:Ddf:mnps:V" c; do
+while getopts "3ABCc:Ddf:mnps:V" c; do
 	case "$c" in
 	3)
+		analogue=false
+		analogueL=true
+		analogueR=false
 		ac3=true
 		;;
 	A)
 		analogue=false
+		;;
+	B)
+		analogue=false
+		analogueL=true
+		analogueR=true
 		;;
 	C)
 		dropouts=false
@@ -236,17 +246,24 @@ if $digital && [ ! -f "$out.digital.flac" ]; then
 fi
 
 if $analogue && [ ! -f "$out.analogue.flac" ]; then
-	effects=()
-	if $ac3; then
-		# Drop the right channel.
-		effects+=(remix 1)
-	fi
-	effects+=(stats)
-
 	action sox \
 		$analogue_params "$in.pcm"  \
 		"$out".analogue.flac \
-		"${effects[@]}"
+		stats
+fi
+if $analogueL && [ ! -f "$out.analogueL.flac" ]; then
+	action sox \
+		$analogue_params "$in.pcm"  \
+		"$out".analogueL.flac \
+		remix 1 \
+		stats
+fi
+if $analogueR && [ ! -f "$out.analogueR.flac" ]; then
+	action sox \
+		$analogue_params "$in.pcm"  \
+		"$out".analogueR.flac \
+		remix 2 \
+		stats
 fi
 
 # Look for a manually-added audio track (e.g. a separate audio capture, or an
@@ -296,19 +313,30 @@ if [ ! -f "$out.mkv" ]; then
 	fi
 	ffcmd+=(-i -)
 	streams=0
+	audiostreams=()
 	if $digital; then
 		ffcmd+=(-i "$out".digital.flac)
-		digstream=$streams
+		audiostreams+=($streams)
 		streams=$(($streams + 1))
 	fi
 	if $analogue; then
 		ffcmd+=(-i "$out".analogue.flac)
-		anastream=$streams
+		audiostreams+=($streams)
+		streams=$(($streams + 1))
+	fi
+	if $analogueL; then
+		ffcmd+=(-i "$out".analogueL.flac)
+		audiostreams+=($streams)
+		streams=$(($streams + 1))
+	fi
+	if $analogueR; then
+		ffcmd+=(-i "$out".analogueR.flac)
+		audiostreams+=($streams)
 		streams=$(($streams + 1))
 	fi
 	if $extraaudio; then
 		ffcmd+=(-i "$out".extra.flac)
-		extrastream=$streams
+		audiostreams+=($streams)
 		streams=$(($streams + 1))
 	fi
 	ffcmd+=(-i "$out".ffmetadata)
@@ -330,15 +358,9 @@ if [ ! -f "$out.mkv" ]; then
 	if ! $deinterlace; then
 		ffcmd+=(-flags +ildct+ilme)
 	fi
-	if $digital; then
-		ffcmd+=(-codec:a:$digstream copy)
-	fi
-	if $analogue; then
-		ffcmd+=(-codec:a:$anastream copy)
-	fi
-	if $extraaudio; then
-		ffcmd+=(-codec:a:$extrastream copy)
-	fi
+	for stream in "${audiostreams[@]}"; do
+		ffcmd+=(-codec:a:$stream copy)
+	done
 	ffcmd+=(-y "$out".mkv)
 
 	action "${doccmd[@]}" | \
