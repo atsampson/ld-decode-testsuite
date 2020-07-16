@@ -1,0 +1,24 @@
+#!/usr/bin/python3
+# Visualise NTSC filters for ld-decode.
+
+import numpy as np
+import numpy.fft as npfft
+import scipy.signal as sps
+
+from showfilter import Filter, Ideal, show_filters
+
+fs = 14318180
+freq4 = 4 * 315.0 / 88.0
+
+filters = []
+
+b = [0.5, 0, -1.0, 0, 0.5]
+filters.append(Filter('split1D', b))
+
+b, a = sps.butter(1, (1.3/(freq4/2)), 'low')
+filters.append(Filter('colorlpi', b, a))
+
+b, a = sps.butter(1, (0.6/(freq4/2)), 'low')
+filters.append(Filter('colorlpq', b, a))
+
+show_filters(filters, fs=fs)
