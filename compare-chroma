@@ -1,5 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 # View pairs of images from two different runs of try-chroma-decoder.
+# Don't bother showing images that are identical after decoding.
 # Usage: compare-chroma NAME1 NAME2
 
 name1="$1"
@@ -9,7 +10,13 @@ files=""
 for file1 in output/$name1/*-output.png; do
 	file2=output/$name2/$(basename $file1)
 	if [ -f "$file1" -a -f "$file2" ]; then
-		files="$files $file1 $file2"
+		if cmp -s <(pngtopnm "$file1") <(pngtopnm "$file2"); then
+			echo "Identical: $file1 $file2"
+		else
+			files="$files $file1 $file2"
+		fi
 	fi
 done
-feh --scale-down $files
+if [ -n "$files" ]; then
+	feh --scale-down $files
+fi
