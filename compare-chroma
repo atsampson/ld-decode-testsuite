@@ -18,5 +18,6 @@ for file1 in output/$name1/*-output.png; do
 	fi
 done
 if [ -n "$files" ]; then
-	feh --scale-down $files
+	# Zoom options allow you to toggle fullscreen (f) at runtime
+	feh --auto-zoom --scale-down $files
 fi
