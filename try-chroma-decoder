@@ -556,7 +556,7 @@ all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
 	snellwilcox-n1d \
-	snellwilcox-n3d nr-vbar-n3d 3dmap1 3dmap2 3dmap3 \
+	snellwilcox-n3d nr-vbar-n3d nr-sweep-n3d 3dmap1 3dmap2 3dmap3 \
 	testcardg-t3ds \
 	testcardg-mono snellwilcox-mono \
 	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
@@ -643,6 +643,9 @@ run_test () {
 	nr-vbar-n3d)
 		# The crosstalk test frames, testing response to shot changes.
 		decode ntsc "$GGV1069" --frame 113 --3d --stillframe 2 -l 5
+		;;
+	nr-sweep-n3d)
+		decode ntsc "$GGV1069" --frame 17151 --3d --stillframe 5 -l 10
 		;;
 	3dmap1)
 		# 3D map -- this should have motion
