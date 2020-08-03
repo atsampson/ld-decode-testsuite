@@ -167,6 +167,11 @@ decode () {
 			stillframe="$2"
 			shift 2
 			;;
+		--1d)
+			# Use 1D decoder
+			usedecoder="${system}1d"
+			shift 1
+			;;
 		--3d|--3dmap)
 			# Use 3D decoder, or 3D decoder showing motion map
 			use3d="$1"
@@ -266,6 +271,14 @@ decode () {
 		case "$usedecoder" in
 		pal*s|transform*s)
 			echo >&2 "Test skipped because no Simple PAL support: $testname"
+			return
+			;;
+		esac
+	fi
+	if ! grep -q ntsc1d "$ldddir/tools/ld-chroma-decoder/main.cpp"; then
+		case "$usedecoder" in
+		ntsc1d)
+			echo >&2 "Test skipped because no ntsc1d support: $testname"
 			return
 			;;
 		esac
@@ -542,6 +555,7 @@ GGV1011="$ATSDATA/Simon/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
 all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
+	snellwilcox-n1d \
 	snellwilcox-n3d nr-vbar-n3d 3dmap1 3dmap2 3dmap3 \
 	testcardg-t3ds \
 	testcardg-mono snellwilcox-mono \
@@ -613,6 +627,12 @@ run_test () {
 	leon)
 		# A few seconds from "Leon", captured noisily with cxadc
 		decode pal "$ATSDATA/cap.leon.r8"
+		;;
+
+	# ntsc1d decoder
+	snellwilcox-n1d)
+		# Snell & Wilcox test pattern from "Video Essentials"
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --1d
 		;;
 
 	# ntsc3d decoder
