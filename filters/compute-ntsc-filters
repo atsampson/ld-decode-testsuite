@@ -15,10 +15,27 @@ filters = []
 b = [0.5, 0, -1.0, 0, 0.5]
 filters.append(Filter('split1D', b))
 
+# Sharper NTSC notch filter, based on those shown in datasheets for a few
+# decoder chips. It's not much of an improvement on the above for motion
+# detection purposes.
+fsc = 315e6/88
+w1 = 1.6e6
+w2 = 0.35e6
+b = sps.remez(25, # 21 isn't bad either
+              [0, fsc-w1, fsc-w2, fsc+w2, fsc+w1, fs/2],
+              [1.0,       0.0,            1.0],
+              [1.0,       1.0,            1.0],
+              fs=fs)
+filters.append(Filter('notch', b))
+
 b, a = sps.butter(1, (1.3/(freq4/2)), 'low')
 filters.append(Filter('colorlpi', b, a))
 
 b, a = sps.butter(1, (0.6/(freq4/2)), 'low')
 filters.append(Filter('colorlpq', b, a))
+
+# I/Q LPF for similarity detection
+b, a = sps.butter(3, 0.1e6, fs=fs)
+filters.append(Filter('hardlpf', b, a))
 
 show_filters(filters, fs=fs)
