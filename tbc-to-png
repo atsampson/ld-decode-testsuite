@@ -1,0 +1,15 @@
+#!/bin/sh
+# Usage: tbc-to-png [-p] TBC-FILE PNG-FILE [ld-chroma-decoder args ...]
+size=760x488
+if [ "$1" = "-p" ]; then
+	size=928x576
+	shift 1
+fi
+tbc="$1"
+png="$2"
+shift 2
+ld-chroma-decoder "$@" "$tbc" - | \
+ffmpeg \
+	-f rawvideo -pix_fmt rgb48 -r 25 -s $size -i - \
+	-frames:v 1 \
+	-y "$png"
