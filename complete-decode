@@ -24,6 +24,7 @@ Options:
   -s FRAMES        Skip initial frames (ld-decode -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -d               Deinterlace before encoding
+  -q STRENGTH      Denoise before encoding (hqdn3d=STRENGTH; typically 4)
   -c CRF           Set CRF for x264 (default 16)
   -n               Dry-run mode; show what will be done
 
@@ -56,9 +57,10 @@ decoder=
 discmap=false
 dryrun=false
 standard=ntsc
+denoise=
 lddargs=()
 noencode=false
-while getopts "3ABCc:Ddf:mnps:V" c; do
+while getopts "3ABCc:Ddf:mnpq:s:V" c; do
 	case "$c" in
 	3)
 		analogue=false
@@ -97,6 +99,9 @@ while getopts "3ABCc:Ddf:mnps:V" c; do
 		;;
 	p)
 		standard=pal
+		;;
+	q)
+		denoise="$OPTARG"
 		;;
 	s)
 		lddargs+=(-s "$OPTARG")
@@ -298,6 +303,7 @@ if [ ! -f "$out.mkv" ]; then
 	if [ -n "$decoder" ]; then
 		chcmd+=(-f "$decoder")
 	fi
+	chcmd+=(--chroma-nr 0 --luma-nr 0)
 	chcmd+=(--input-json "$prevtbc.json" - -)
 
 	ffcmd=(ffmpeg -f rawvideo -pix_fmt rgb48)
@@ -348,6 +354,9 @@ if [ ! -f "$out.mkv" ]; then
 	filters="$filters,setfield=tff"
 	if $deinterlace; then
 		filters="$filters,bwdif"
+	fi
+	if [ -n "$denoise" ]; then
+		filters="$filters,hqdn3d=$denoise"
 	fi
 	# Use yuvj444p for full range and no chroma subsampling.
 	ffcmd+=( \
