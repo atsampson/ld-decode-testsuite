@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+# Join together sections of several RF samples, in any of the formats ld-decode
+# understands. Output to stdout in .lds format.
+# XXX This is rather slow (45MiB/s) - it'd be better to use ld-lds-converter/ld-ldf-reader to read
+
+import os
+import subprocess
+import sys
+
+sys.path.append(os.path.join(sys.path[0], "../ld-decode"))
+import lddecode.utils
+
+def usage():
+    print("""Usage: lds-splice [FILE START-SAMPLE END-SAMPLE] ...
+
+START-SAMPLE and END-SAMPLE are a half-open range.
+If END-SAMPLE is 0, samples are copied until the end of the file.""", file=sys.stderr)
+    sys.exit(1)
+
+args = sys.argv[1:]
+if (len(args) % 3) != 0:
+    usage()
+
+converter = subprocess.Popen(['ld-lds-converter', '-p'], stdin=subprocess.PIPE)
+
+for i in range(0, len(args), 3):
+    try:
+        filename = args[i]
+        start_sample = int(args[i + 1])
+        end_sample = int(args[i + 2])
+    except ValueError:
+        usage()
+
+    # XXX Need a better way of doing this...
+    if end_sample == 0:
+        end_sample = int(1e15)
+
+    print("Opening", filename, file=sys.stderr)
+    with open(filename, "rb") as f:
+        loader = lddecode.utils.make_loader(filename)
+
+        CHUNK_SIZE = 1 * 1024 * 1024
+        pos = start_sample
+        while pos < end_sample:
+            print("Reading", filename, "at", pos,
+                  "- %d%%" % (int(100 * (pos - start_sample) / (end_sample - start_sample))),
+                  file=sys.stderr)
+
+            size = min(end_sample - pos, CHUNK_SIZE)
+
+            # This is a bit ugly: load_packed_data_4_40 is happy with arbitrary
+            # starting points, but it can only read a multiple of 4 samples
+            padded_size = ((size + 3) // 4) * 4
+            assert (padded_size % 4) == 0
+            assert padded_size >= size
+
+            # And this is even more ugly: the loaders have no good way of indicating EOF
+            try:
+                data = loader(f, pos, padded_size)
+            except:
+                # EOF, presumably
+                data = None
+            if data is None:
+                print("End of file", filename, file=sys.stderr)
+                break
+
+            assert len(data) == padded_size
+            converter.stdin.write(data[:size])
+            pos += size
+
+converter.stdin.close()
+converter.wait()

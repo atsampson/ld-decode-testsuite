@@ -1,0 +1,312 @@
+#!/usr/bin/python3
+# A dodgy disc can cause the player to skip. Given a set of .lds captures of
+# the same disc, and .tbc.json files from attempts at decoding them, try to
+# identify skips and paste together a complete .lds file.
+# XXX This doesn't splice very well at the moment -- could also do .tbc (but without sound)
+
+import json
+import os
+import re
+import shlex
+import statistics
+import sys
+
+CAPTURE_EXTS = [".lds", ".ldf", ".raw.oga"]
+
+class Capture:
+    """A single digitisation of a disc side, and some attempts at decoding parts of it."""
+
+    def __init__(self, filename, base):
+        self.filename = filename
+        self.base = base
+        self.jsons = {}
+
+        self.faults = {}
+        self.frame_no_loc = {}
+        self.first_frame_no = None
+        self.last_frame_no = None
+
+    def load_json(self, filename):
+        print("Loading JSON:", filename)
+        with open(filename) as f:
+            self.jsons[filename] = json.load(f)
+
+    def process(self):
+        print("\n## Capture", self.filename)
+        for filename, data in sorted(self.jsons.items()):
+            self.process_decode(filename, data)
+
+    def process_decode(self, json_filename, data):
+        print("\n### Decode", json_filename)
+
+        fields = data['fields']
+        num_fields = len(fields)
+
+        # We allow two fields without frame numbers before we complain
+        # (pulldown CAV discs do this)
+        MAX_SINCE_FRAME_NO = 2
+
+        # Compute field lengths in samples
+        field_lens = []
+        for i in range(len(fields) - 1):
+            field_lens.append(fields[i + 1]['fileLoc'] - fields[i]['fileLoc'])
+        median_field_len = statistics.median(field_lens)
+        # No length for the last field, so fill with the median (we may stop before then anyway)
+        field_lens.append(median_field_len)
+
+        prev_loc = 0
+        prev_seq_no = 0
+        # A decode might not be starting on the first frame of the disc
+        cur_frame_no = None
+        expect_frame_no = None
+        since_frame_no = 0
+        seen_leadout = False
+
+        def mark_bad_field(data, reason):
+            # Even on a good capture, the frame number we have here can be from 2 fields earlier.
+            if cur_frame_no is None:
+                # VBI has been lost for several fields. So it's possible the TBC is off-locked,
+                # in which case the other signals we check for aren't reliable.
+                return
+
+            print("Bad field seqNo", data['seqNo'], "frameNumber", cur_frame_no, "-", reason)
+            fault_list = self.faults.setdefault(cur_frame_no, [])
+            fault_list.append(reason)
+
+        for i, field in enumerate(fields):
+            # Check for leadout
+            vbi = field.get('vbi')
+            if vbi is not None:
+                vbi_data = vbi.get('vbiData')
+                if vbi_data is not None:
+                    if 0x80EEEE in vbi_data:
+                        seen_leadout = True
+                        break
+
+            # Update frame number.
+            # Do this first, since mark_bad_field needs it, and we want to
+            # start capturing errors again when VBI reappears.
+            frame_no = field.get('frameNumber')
+            if frame_no is not None:
+                # Check the frame numbers are in sequence.
+                # Allow skipping forward by 2 for the NTSC CLV skip rule -- a
+                # bitflip in the last place will also trigger this, but it's OK
+                # for us if the frame number's off by 1 sometimes.
+                if expect_frame_no is not None and frame_no != expect_frame_no and frame_no != expect_frame_no + 1:
+                    # Probably not a bad frame, just a bitflip in the VBI, but
+                    # we shouldn't use the number for reporting...
+                    print("Unexpected frameNumber", frame_no, "when expecting", expect_frame_no)
+                else:
+                    cur_frame_no = frame_no
+                    self.frame_no_loc[frame_no] = int(field['fileLoc'])
+
+                    if self.first_frame_no is None or cur_frame_no < self.first_frame_no:
+                        self.first_frame_no = cur_frame_no
+                    if self.last_frame_no is None or cur_frame_no > self.last_frame_no:
+                        self.last_frame_no = cur_frame_no
+
+                expect_frame_no = frame_no + 1
+
+                if since_frame_no > MAX_SINCE_FRAME_NO:
+                    mark_bad_field(field, 'vbiRegained')
+                since_frame_no = 0
+
+            # Check seqNo goes up by 1 each time
+            seq_no = field['seqNo']
+            if seq_no != prev_seq_no + 1:
+                mark_bad_field(field, 'seqNo')
+            prev_seq_no = seq_no
+
+            # Check decodeFaults is 0
+            if field.get('decodeFaults', 0) > 0:
+                mark_bad_field(field, 'decodeFaults')
+
+            # Check field length is close to the median
+            # XXX The first frame decoded seems to be a bit longer (hmm)
+            if abs(field_lens[i] - median_field_len) > (median_field_len * 0.005) and i > 0:
+                mark_bad_field(field, 'fieldLength')
+
+            # Check for missing frameNumber (i.e. missing VBI).
+            # Do this last, so we capture other errors on a field with vbiLost.
+            if frame_no is None:
+                since_frame_no += 1
+                # Too long since we last saw one?
+                if since_frame_no == MAX_SINCE_FRAME_NO:
+                    mark_bad_field(field, 'vbiLost')
+                    cur_frame_no = None
+
+        if not seen_leadout:
+            mark_bad_field(fields[-1], 'noLeadout')
+
+        # XXX More things to check:
+        # Frame numbers should increase by 1 (although there's that odd CLV rule?) - detect errors
+        # Phase sequence
+        # SNR much worse than median?
+        # Number of dropouts?
+
+        # Splice halfway between the faults, at a point where frameNumber agrees
+        # Bad fields while VBI lost are dubious - ignore if they overlap?
+
+class Side:
+    """A disc side that we're trying to assemble a good version of."""
+
+    def __init__(self, base):
+        self.base = base
+        self.captures = []
+        self.first_frame_no = None
+        self.last_frame_no = None
+
+    def process(self):
+        print("\n# Side", self.base)
+
+        for capture in sorted(self.captures, key=lambda c: c.base):
+            capture.process()
+            if capture.first_frame_no is None:
+                # No decodes for this capture
+                continue
+
+            if self.first_frame_no is None or capture.first_frame_no < self.first_frame_no:
+                self.first_frame_no = capture.first_frame_no
+            if self.last_frame_no is None or capture.last_frame_no > self.last_frame_no:
+                self.last_frame_no = capture.last_frame_no
+
+        if self.first_frame_no is None:
+            # No decodes at all
+            return
+
+        print("\n## Assemble from", self.first_frame_no, "to", self.last_frame_no)
+
+        print("\nCaptures:")
+        capture_pos = []
+        capture_faults = []
+        for i, capture in enumerate(self.captures):
+            capture_pos.append(0)
+            capture_faults.append(list(sorted(capture.faults.items())))
+            print("Capture", i, "from", capture.first_frame_no, "to", capture.last_frame_no)
+            print("-", capture.filename)
+            for json_filename in capture.jsons.keys():
+                print("-", json_filename)
+
+        # Build a list of segments of captures that avoid faults (unless impossible)
+        pieces = []
+        all_avoided = True
+        frame_no = self.first_frame_no
+        while frame_no <= self.last_frame_no:
+            print("\nFrame", frame_no)
+
+            # Find the capture that contains frame_no in which the next fault is furthest away
+            best = None
+            best_distance = None
+            best_next_pos = None
+            for i, capture in enumerate(self.captures):
+                if capture.first_frame_no is None:
+                    continue
+                if capture.first_frame_no > frame_no or capture.last_frame_no < frame_no:
+                    continue
+
+                # Discard any faults that we've skipped already
+                pos = capture_pos[i]
+                while pos < len(capture_faults[i]) and capture_faults[i][pos][0] < frame_no:
+                    print("- Skipped", pos, "fault", capture_faults[i][pos])
+                    pos += 1
+                capture_pos[i] = pos
+
+                # Find the position of the next fault (if there is one)
+                if pos < len(capture_faults[i]):
+                    print("Capture", i, "pos", pos, "next fault", capture_faults[i][pos])
+                    next_pos = capture_faults[i][pos][0]
+                else:
+                    print("Capture", i, "no more faults until end", capture.last_frame_no)
+                    next_pos = capture.last_frame_no + 1
+
+                distance = next_pos - frame_no
+                if best is None or distance > best_distance:
+                    best = i
+                    best_distance = distance
+                    best_next_pos = next_pos
+
+            assert best is not None
+            print("Best capture", best, "has next fault at", best_next_pos)
+
+            GAP = 5
+            if best_next_pos > self.last_frame_no:
+                print("Can take rest of the side from here")
+                next_frame_no = best_next_pos
+            elif (best_next_pos - GAP) <= frame_no:
+                print("Next fault is too close - cannot be avoided")
+                next_frame_no = frame_no + GAP
+                all_avoided = False
+            else:
+                # Switch again a few frames before the next fault
+                next_frame_no = best_next_pos - GAP
+                # XXX That number might not actually exist
+
+            pieces.append([self.captures[best], frame_no, next_frame_no])
+
+            frame_no = next_frame_no
+
+        if all_avoided:
+            print("\nSuccess - all faults avoided")
+        else:
+            print("\nFAILURE - some faults included")
+
+        # Use the start and end of the first and last source
+        pieces[0][1] = None
+        pieces[-1][2] = None
+
+        # XXX Problem: the fileLoc values aren't really accurate enough to do a good edit here...
+        command = ["lds-splice"]
+        for capture, frame_no, next_frame_no in pieces:
+            start_loc = 0 if frame_no is None else capture.frame_no_loc[frame_no]
+            end_loc = 0 if next_frame_no is None else capture.frame_no_loc[next_frame_no]
+            command += [capture.filename, str(start_loc), str(end_loc)]
+
+        print("\nCommand:")
+        print(" ".join(shlex.quote(s) for s in command))
+
+def main(args):
+    # Arguments can be (any mix of) captures or .tbc.json files.
+    # Captures that represent the same disc should have the same text before _side[0-9]_.
+    # JSON filenames must start with the name of a capture (less the capture extension).
+    sides = {}
+    captures = []
+    json_filenames = []
+    for arg in args:
+        if arg.endswith(".tbc.json"):
+            json_filenames.append(arg)
+            continue
+        for ext in CAPTURE_EXTS:
+            if arg.endswith(ext):
+                capture_base = os.path.basename(arg)[:-len(ext)]
+                capture = Capture(arg, capture_base)
+                captures.append(capture)
+
+                m = re.match(r'^(.*_side[0-9]+)', capture_base)
+                if m is None:
+                    print("Can't find title in capture filename:", arg)
+                    continue
+                side_base = m.group(1)
+
+                if side_base not in sides:
+                    sides[side_base] = Side(side_base)
+                sides[side_base].captures.append(capture)
+
+                break
+        else:
+            print("Ignoring unrecognised filename:", arg)
+
+    # Attach JSON files to their captures and load them
+    for filename in json_filenames:
+        for capture in captures:
+            if os.path.basename(filename).startswith(capture.base):
+                capture.load_json(filename)
+                break
+        else:
+            print("Ignoring JSON file that doesn't match a capture:", filename)
+
+    # Do it!
+    for side in sorted(sides.values(), key=lambda s: s.base):
+        side.process()
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
