@@ -152,6 +152,7 @@ decode () {
 	usedoc=
 	docargs=
 	aspect=4:3
+	y4m=false
 	if [ -n "$defaultdecoder" ]; then
 		usedecoder="$defaultdecoder"
 	fi
@@ -219,6 +220,11 @@ decode () {
 			aspect="$2"
 			shift 2
 			;;
+		--y4m)
+			# Use y4m output (which also tests plain yuv)
+			y4m=true
+			shift 1
+			;;
 		*)
 			# Remaining args are passed to the chroma decoder directly
 			break
@@ -283,6 +289,12 @@ decode () {
 			;;
 		esac
 	fi
+	if ! grep -q outputFormatOption "$ldddir/tools/ld-chroma-decoder/main.cpp"; then
+		if $y4m; then
+			echo >&2 "Test skipped because no y4m support: $testname"
+			return
+		fi
+	fi
 
 	if $newonly && [ -f "$outdir/$testname-output.png" ]; then
 		echo >&2 "Test already done: $testname"
@@ -328,6 +340,9 @@ decode () {
 	# Name the cached .tbc after the .lds file, for reuse between tests.
 	tbc="$cachedir/$(echo "$lds" | sed 's,/,_,g').tbc"
 	rgb="$tmpdir/$testname.rgb"
+	if $y4m; then
+		rgb="$tmpdir/$testname.y4m"
+	fi
 
 	case "$tbcsource" in
 	ld-decode)
@@ -394,6 +409,9 @@ decode () {
 	if $nogain; then
 		decoder="$decoder --chroma-gain 1.0"
 	fi
+	if $y4m; then
+		decoder="$decoder -p y4m"
+	fi
 	if [ -n "$extraopts" ]; then
 		decoder="$decoder $extraopts"
 	fi
@@ -404,6 +422,9 @@ decode () {
 
 	ffmpeg="ffmpeg -loglevel error -y"
 	ffmpegout="$ffmpeg -f rawvideo -pix_fmt rgb48 -s $outputsize"
+	if $y4m; then
+		ffmpegout="$ffmpeg -f yuv4mpegpipe"
+	fi
 
 	if $inputfiles; then
 		$ffmpeg -f rawvideo -pix_fmt gray16 -s $inputsize -r 1 \
@@ -559,6 +580,7 @@ all_tests="\
 	snellwilcox-n3d nr-vbar-n3d nr-sweep-n3d 3dmap1 3dmap2 3dmap3 \
 	testcardg-t3ds \
 	testcardg-mono snellwilcox-mono \
+	testcardg-yuv444 testcardg-gray16 snellwilcox-yuv444 snellwilcox-gray16 \
 	noise-ntsc-20000 noise-pal-20000 noise-t2d-20000 \
 	nr-vbar nr-multiburst nr-white100 nr-black7.5 nr-compositetest nr-stairstep nr-bars \
 	nr-magenta nr-cross nr-dot nr-stills nr-sweep nr-testcard nr-ramp nr-bounce \
@@ -741,6 +763,20 @@ run_test () {
 		;;
 	snellwilcox-mono)
 		decode ntsc "$testdatadir/ve-snw-cut.lds" --decoder mono
+		;;
+
+	# y4m output
+	testcardg-yuv444)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder pal2d --y4m
+		;;
+	testcardg-gray16)
+		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder mono --y4m
+		;;
+	snellwilcox-yuv444)
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --decoder ntsc2d --y4m
+		;;
+	snellwilcox-gray16)
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --decoder mono --y4m
 		;;
 
 	# Tests with artificial noise added
