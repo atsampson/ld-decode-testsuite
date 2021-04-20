@@ -12,7 +12,7 @@ fs = 40e6
 filters = []
 
 b, a = sps.butter(6, 4500000, fs=fs)
-filters.append(Filter('orig NTSC LPF', b, a))
+#filters.append(Filter('orig NTSC LPF', b, a))
 
 b, a = sps.butter(7, 4800000, fs=fs)
 filters.append(Filter('orig PAL LPF', b, a))
@@ -29,23 +29,29 @@ pal_spec_delay = Ideal('IEC PAL spec',
                        np.array([0, 15e-9, 15e-9, 20e-9, 20e-9, 50e-9]) * fs)
 # So it looks like they're expecting an elliptic LPF.
 
+# BT.601's LPF spec suggests:
+# - design for 0.01 dB passband ripple, with 0.05 dB as a practical maximum
+# - minimum 40 dB stopband suppression
+# - For luminance/RGB, flat to 5.75 MHz, -12 dB at 6.75 MHz, -40 dB at 8 MHz
+
 if False:
     # Find an elliptic filter with a group delay curve that minimises RMS error vs the spec.
     # PAL is around: ellip(N=7, rp=0.04, rs=53.0, Wn=5.3e6)
     # NTSC is around: ellip(N=5, rp=0.09, rs=40.0, Wn=4.35e6)
     #  ellip(N=5, rp=0.13, rs=47.5, Wn=4.350000e+06)
-    #spec = pal_spec_delay
-    spec = ntsc_spec_delay
+    spec = pal_spec_delay
+    #spec = ntsc_spec_delay
     best = []
     for N in range(5, 9):
-        for rp in np.arange(0.01, 0.51, 0.05): #np.arange(0.01, 0.16, 0.01):
+        for rp in np.arange(0.0001, 0.0015, 0.0001): #np.arange(0.01, 0.16, 0.01):
             print(N, rp)
-            for rs in np.arange(60, 68, 2.5):
+            for rs in np.arange(40, 120, 10):
+                for Wn in np.arange(4.0e6, 5.5e6, 0.1e6): # PAL
                 #for Wn in np.arange(4.9e6, 6.11e6, 0.05e6): # PAL
-                for Wn in np.arange(4.0e6, 4.81e6, 0.05e6): # NTSC
+                #for Wn in np.arange(4.0e6, 4.81e6, 0.05e6): # NTSC
                     b, a = sps.ellip(N, rp, rs, Wn, fs=fs)
 
-                    fil = Filter('ellip(N=%d, rp=%.2f, rs=%.1f, Wn=%e)' % (N, rp, rs, Wn), b, a)
+                    fil = Filter('ellip(N=%d, rp=%.4f, rs=%.1f, Wn=%e)' % (N, rp, rs, Wn), b, a)
 
                     dw, d = sps.group_delay((fil.b, fil.a), spec.fs, fs=fs)
                     d -= d[0]
@@ -57,20 +63,40 @@ if False:
         print('%10f %s' % (rms, fil.name))
 
     #sys.exit(0)
-    for rms, fil in best[:5]:
+    for rms, fil in best[:10]:
         filters.append(fil)
 
 if True:
     b, a = sps.ellip(N=7, rp=0.04, rs=53.0, Wn=5.3e6, fs=fs)
-    filters.append(Filter('PAL ellip', b, a))
+    #filters.append(Filter('PAL ellip', b, a))
     b, a = sps.ellip(N=5, rp=0.09, rs=40.0, Wn=4.35e6, fs=fs)
-    filters.append(Filter('NTSC ellip', b, a))
+    #filters.append(Filter('NTSC ellip', b, a))
     #b, a = sps.ellip(N=5, rp=0.13, rs=47.5, Wn=4.350000e+06, fs=fs)
     #filters.append(Filter('Alt NTSC ellip', b, a))
     #b, a = sps.ellip(N=5, rp=0.16, rs=62.5, Wn=4.300000e+06, fs=fs)
     #filters.append(Filter('Alt2 NTSC ellip', b, a))
     b, a = sps.ellip(N=7, rp=0.02, rs=100.0, Wn=5.3e6, fs=fs)
-    filters.append(Filter('PAL ellip 2', b, a))
+    filters.append(Filter('PAL issue478', b, a))
+    b, a = sps.ellip(N=7, rp=0.02, rs=80.0, Wn=5.000000e+06, fs=fs) # 0.14
+    #filters.append(Filter('PAL ats3a', b, a))
+    b, a = sps.ellip(N=7, rp=0.010, rs=65.0, Wn=5.000000e+06, fs=fs) # 0.13
+    #filters.append(Filter('PAL ats3b', b, a))
+    b = sps.firwin(numtaps=200, cutoff=5.5e6, window='blackman', fs=fs)
+    #filters.append(Filter('PAL ats3c', b))
+    b, a = sps.bessel(N=61, Wn=5.0e6, norm='mag', fs=fs)
+    #filters.append(Filter('PAL ats3d', b, a))
+    b = sps.firwin(numtaps=200, cutoff=5.5e6, window=('kaiser', 14), fs=fs)
+    #filters.append(Filter('PAL ats3e', b))
+    b, a = sps.ellip(N=5, rp=0.01, rs=40.0, Wn=4.8e6, fs=fs)
+    #filters.append(Filter('PAL ats3f', b, a))
+    b, a = sps.ellip(N=5, rp=0.01, rs=80.0, Wn=4.8e6, fs=fs)
+    #filters.append(Filter('PAL ats3g', b, a))
+    b, a = sps.ellip(N=5, rp=0.01, rs=120.0, Wn=4.8e6, fs=fs)
+    filters.append(Filter('PAL ats3h', b, a))
+    b, a = sps.butter(7, 5.2e6, fs=fs)
+    filters.append(Filter('PAL orig5.2', b, a))
+    b, a = sps.butter(7, 6.0e6, fs=fs)
+    filters.append(Filter('PAL ats4a', b, a))
 
 def fir_from_fft(fir_size, freq, trans, fs, window='hamming'):
     # Ref: "The Scientist and Engineer's Guide to DSP", ch17 p299
@@ -101,6 +127,6 @@ for window in ('hamming', 'blackman'):
             #filters.append(Filter('from FFT ' + str(cutoff) + ' ' + str(window), b))
 
 show_filters(filters, fs=fs, ideal_delays=[
-    ntsc_spec_delay,
+#    ntsc_spec_delay,
     pal_spec_delay,
 ])
