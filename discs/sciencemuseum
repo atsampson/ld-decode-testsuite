@@ -1,0 +1,19 @@
+#!/bin/sh -ex
+for tbc in out/ScienceMuseum-NuclearPhysicsICE_*.tbc; do
+	base=$(echo "$tbc" | sed 's/.tbc$//')
+	out=videos/$(basename "$base" | sed 's/^\([^_]*\)_.*\(side[^_]*\)_.*/\1_\2/')_v1.mkv
+	ld-dropout-correct -t1 --overcorrect \
+		--output-json $base.doc.json $base.tbc - | \
+	ld-chroma-decoder -t1 \
+		-f transform3d --transform-threshold 0.4 \
+		--input-json $base.tbc.json - - | \
+	ffmpeg \
+		-f rawvideo -pix_fmt rgb48 -r 25 -s 928x576 -i - \
+		-i $base.analogue.flac \
+		-i $base.ffmetadata \
+		-map 0:0 -map 1:0 -map_metadata 1 \
+		-filter:v crop=922:576,setdar=4/3,setfield=tff,bwdif=mode=send_frame \
+		-pix_fmt yuv420p -profile:v main -codec:v libx264 -crf 12 \
+		-codec:a:0 copy \
+		-y "$out"
+done

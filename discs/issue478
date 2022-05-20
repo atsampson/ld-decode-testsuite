@@ -1,0 +1,20 @@
+# Particularly problematic bits...
+
+# Captions, 100% bars and PLUGE - transform3d artefact on scene change
+extract smnp-start1 $side1 1 524489587 10
+# Captions, 100% bars and PLUGE - illegal yellow bars trigger DOC
+extract smnp-start2 $side2 1 517675402 10
+# Video source with insert - LF response and ringing
+extract smnp-uranium $side1 17878 29128451253 80
+# Sharp film source - ringing (some already present?)
+extract smnp-kwh $side1 29486 47701724533 10
+# Sharp film source - display text
+extract smnp-mimic $side1 33658 54377105780 10
+# Caption on black, then caption on film source
+extract smnp-manchester $side2 6082 10247537189 10
+# Oil engine (VHS source?) - 5.2MHz ringing
+extract smnp-oilengine $side2 28080 45445252532 10
+# AV Studio logo - ghost-y tape source
+extract smnp-crest $side2 48813 78618925144 10
+
+
