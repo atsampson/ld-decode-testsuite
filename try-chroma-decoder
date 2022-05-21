@@ -570,9 +570,13 @@ benchmark () {
 	fi
 }
 
+# Populate this by running testvideos.py.
+EVALDATA="$cachedir/evaluate/video"
+
 ATSDATA="/n/stuff2/capture/laserdisc"
 GGV1069="$ATSDATA/Simon/GGV1069_CAV_NTSC_side1_2019-06-15_18-02-41.raw.oga"
 GGV1011="$ATSDATA/Simon/GGV1011_CAV_PAL_side1_DD1_2019-06-12_20-18-21.raw.oga"
+
 all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
@@ -956,11 +960,10 @@ run_test () {
 		;;
 
 	# Synthetic tests using ld-chroma-encoder
-	# XXX Generate these automatically (since the sources are public)
 	# XXX Compare line-locked and subcarrier-locked
 	vqeg-mobcal-*)
 		decoder=$(echo "$testname" | sed 's/.*-//')
-		decode pal "$ATSDATA/VQEG/vqeg-mobilecalendar.tbc" --nogain --decoder "$decoder" --stillframe 25 -s 97
+		decode pal "$EVALDATA/vqeg-mobilecalendar.tbc" --nogain --decoder "$decoder" --stillframe 25 -s 97
 		;;
 
 	# Performance tests
