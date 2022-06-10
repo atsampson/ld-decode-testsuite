@@ -140,7 +140,6 @@ def evaluate(testcase, decoder_args):
     outprefix = os.path.join(tmp_dir, testcase.name + ".out")
 
     # Start ld-chroma-decoder with output to a pipe
-    outrgbname = outprefix + ".rgb"
     decoder_cmd = [
         os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "ld-chroma-decoder"),
         "--quiet",
