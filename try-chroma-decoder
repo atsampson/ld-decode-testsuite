@@ -997,7 +997,7 @@ run_test () {
 		;;
 	doc-aspen-*)
 		doc_decode "$testname" \
-			ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s42000 --ldd-S42883 --ldd-l16
+			ntsc "$ATSDATA/Simon/MIT_Aspen_Map_4.raw.oga" --ldd-s41900 --ldd-S42875 --ldd-l16 --frame 42883
 		;;
 
 	# XXX Signals with varying chroma/burst amplitude
