@@ -1,7 +1,9 @@
 // Use a composite video signal as a test signal for a Domesday Duplicator,
 // by detecting sync pulses and checking they're coming at the right rate.
-// (Because if you're using a DDD, it's probably connected to something which
-// has a video output too...)
+//
+// The input from this should be the default PAL blue screen from the
+// LD-V4300D that it produces when stopped without a disc, with the DDD gain
+// switches set to minimum (1111).
 
 #include <algorithm>
 #include <iostream>
@@ -19,12 +21,13 @@ constexpr double LINE_FREQ = 15625; // PAL
 constexpr int LINE_SAMPLES = static_cast<int>(SAMPLE_RATE / LINE_FREQ);
 constexpr int HALF_LINE_SAMPLES = LINE_SAMPLES / 2;
 
-constexpr int FIELD_1_SAMPLES = 313 * LINE_SAMPLES;
-constexpr int FIELD_2_SAMPLES = 312 * LINE_SAMPLES;
+constexpr int FIELD_1_SAMPLES = 313 * LINE_SAMPLES; // PAL
+constexpr int FIELD_2_SAMPLES = 312 * LINE_SAMPLES; // PAL
 
-constexpr int NUM_CHUNKS = 16;
-constexpr int CHUNK_SIZE = static_cast<int>(1.2 * (SAMPLE_RATE / LINE_FREQ)) / NUM_CHUNKS;
-constexpr int BUF_SIZE = NUM_CHUNKS * CHUNK_SIZE;
+constexpr int FILEBUF_SIZE = FIELD_1_SAMPLES + FIELD_2_SAMPLES;
+
+// We want a bit more than a line's worth of history.
+constexpr int RINGBUF_SIZE = (11 * LINE_SAMPLES) / 10;
 
 enum GapType {
     INITIAL,
@@ -34,18 +37,18 @@ enum GapType {
 };
 
 int main(int argc, char *argv[]) {
-    // Ring buffer of samples
-    int16_t buf[BUF_SIZE];
-
+    // Buffer for reading from file
+    int16_t filebuf[FILEBUF_SIZE];
     uint64_t file_offset = 0;
-    int cur_chunk = 0;
-    bool ring_full = false;
 
+    // Ring buffer for history of samples, so we can keep a running minimum
+    int16_t ringbuf[RINGBUF_SIZE];
+    int ring_pos = 0;
+    bool ring_full = false;
     int16_t min_value = 0;
-    uint64_t last_down = 0;
 
     bool up = false;
-
+    uint64_t last_down = 0;
     GapType last_gap = INITIAL;
 
     uint64_t last_field = 0;
@@ -53,53 +56,50 @@ int main(int argc, char *argv[]) {
     int last_field_num = 0;
 
     while (true) {
-        const int buf_offset = CHUNK_SIZE * cur_chunk;
-
-        if (ring_full) {
-            // Discard the oldest chunk. Was the maximum value in it?
-            for (int i = 0; i < CHUNK_SIZE; i++) {
-                const int16_t value = buf[buf_offset + i] >> 6;
-                if (value == min_value) {
-                    // This was (or was equal to) the previous minimum value.
-                    // Scan the other chunks to find the new minimum value.
-                    min_value = 0;
-                    for (int j = (buf_offset + CHUNK_SIZE) % BUF_SIZE; j != buf_offset; j = (j + 1) % BUF_SIZE) {
-                        const int16_t value = buf[j] >> 6;
-                        if (value < min_value) min_value = value;
-                    }
-//                    std::cout << "rescan for min = " << min_value << "\n";
-                    break;
-                }
-            }
-        }
-
-        // Read the next chunk into the ring buffer
-        std::cin.read(reinterpret_cast<char *>(&buf[buf_offset]), CHUNK_SIZE * sizeof(int16_t));
+        // Read data into filebuf
+        std::cin.read(reinterpret_cast<char *>(filebuf), sizeof filebuf);
         if (std::cin.eof()) break;
+//        std::cout << "read chunk min_value " << min_value << "\n";
 
-        // Update the ring pointer and check if we've filled the whole ring
-        cur_chunk = (cur_chunk + 1) % NUM_CHUNKS;
-        if (cur_chunk == 0) ring_full = true;
-
-//        std::cout << "read chunk " << cur_chunk << "/" << NUM_CHUNKS << ", min = " << min_value << "\n";
-
-        // Process samples in the new chunk
-        for (int i = 0; i < CHUNK_SIZE; i++) {
-            const int16_t value = buf[buf_offset + i] >> 6;
+        // Process samples from filebuf
+        for (int i = 0; i < FILEBUF_SIZE; i++) {
+            const uint64_t pos = file_offset + i;
+            const int16_t value = filebuf[i] >> 6;
 //            std::cout << value << " ";
 
+            if (ring_full) {
+                // We are replacing the oldest sample in ringbuf;
+                // was it the current minimum?
+                if (ringbuf[ring_pos] == min_value) {
+                    // Yes -- scan the buffer to find the new minimum.
+                    // (This might look expensive, but in practice we only need
+                    // to do it 1-2 times per line.)
+                    min_value = 0;
+                    for (int j = (ring_pos + 1) % RINGBUF_SIZE; j != ring_pos; j = (j + 1) % RINGBUF_SIZE) {
+                        if (ringbuf[j] < min_value) min_value = ringbuf[j];
+                    }
+//                    std::cout << "rescan for min = " << min_value << "\n";
+                }
+            }
+
+            // Store the new value in ringbuf
+            ringbuf[ring_pos] = value;
+            ring_pos = (ring_pos + 1) % RINGBUF_SIZE;
+            if (ring_pos == 0) ring_full = true;
+
+            // Update minimum
             if (value < min_value) min_value = value;
 
             // Detect sync edges, with some hysteresis
-            const int16_t up_limit = min_value + 100; // XXX magic numbers
-            const int16_t down_limit = min_value + 50;
+            const int16_t down_limit = min_value + 100; // magic numbers
+            const int16_t up_limit = down_limit + 20;
+//            std::cout << value << "(" << down_limit << ") ";
             if (up && value > up_limit) {
                 up = false;
 //                std::cout << "up edge at " << file_offset + i << "\n";
             } else if (!up && value < down_limit) {
                 up = true;
 
-                const uint64_t pos = file_offset + i;
                 const uint64_t len = pos - last_down;
                 last_down = pos;
 //                std::cout << "down edge at " << pos << " len " << len << "\n";
@@ -112,12 +112,13 @@ int main(int argc, char *argv[]) {
                 } else {
                     gap = UNKNOWN;
                 }
+//                std::cout << "len " << len << " gap " << gap << " value " << value << " down_limit " << down_limit << "\n";
 
-                if (gap == UNKNOWN && last_gap != SHORT) {
+                if (gap == UNKNOWN && last_gap == LONG) {
                     // We can't really tell during the equalisation pulses as
-                    // the baseline drifts too high, but if it wasn't preceded
-                    // by a short gap...
-                    std::cout << "unexpected down-edge spacing " << len << " at " << pos << "\n";
+                    // the baseline drifts too high, but if the last valid gap
+                    // wasn't a short one...
+                    std::cout << "unexpected down-edge spacing " << len << " (expected " << LINE_SAMPLES << " or " << HALF_LINE_SAMPLES << ") at " << pos << "\n";
                 }
                 if (gap == SHORT && last_gap == LONG) {
                     // First short gap in a field.
@@ -133,11 +134,13 @@ int main(int argc, char *argv[]) {
                         if (last_field_num == 1) {
                             std::cout << "duplicate field 1 at " << pos << "\n";
                         }
+//                        std::cout << "field 1\n";
                         last_field_num = 1;
                     } else if (abs(field_len - FIELD_2_SAMPLES) < 500) {
                         if (last_field_num == 2) {
                             std::cout << "duplicate field 2 at " << pos << "\n";
                         }
+//                        std::cout << "field 2\n";
                         last_field_num = 2;
                     } else {
                         std::cout << "unexpected field len " << field_len << " (expected " << FIELD_1_SAMPLES << " or " << FIELD_2_SAMPLES << ") at " << pos << "\n";
@@ -147,9 +150,14 @@ int main(int argc, char *argv[]) {
 
                 last_gap = gap;
             }
+
+            // Complain if we haven't seen a field in a while.
+            if (seen_field && (pos - last_field) > (2 * FIELD_1_SAMPLES)) {
+                std::cout << "no field seen at " << pos << "\n";
+            }
         }
 //        std::cout << "\n";
 
-        file_offset += CHUNK_SIZE;
+        file_offset += FILEBUF_SIZE;
     }
 }
