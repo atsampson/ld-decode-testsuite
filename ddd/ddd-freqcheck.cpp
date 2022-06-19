@@ -36,7 +36,7 @@ enum GapType {
     UNKNOWN
 };
 
-int main(int argc, char *argv[]) {
+int main() {
     // Buffer for reading from file
     int16_t filebuf[FILEBUF_SIZE];
     uint64_t file_offset = 0;
