@@ -1,0 +1,66 @@
+#!/usr/bin/python3
+# Help decide the sequence number and test sequence lengths in the DDD FPGA.
+#
+# In test mode, we want to maximise the number of transfers before (a) an
+# individual USB transfer has the same contents or (b) a diskbuffer has the
+# same contents. This gives us the best chance of detecting a fault either in
+# the DDD firmware or in DomesdayDuplicator (e.g. dropping transfers,
+# transferring the wrong contents, dropping diskbuffers, reordering
+# diskbuffers...).
+#
+# In regular mode, we just want the maximum sequence number to be as high as
+# possible. This maximises the length of the missed transfer that we can detect
+# the length of accurately.
+#
+# The best option seems to be sequence numbers 0-62, test sequence 0-1020 --
+# it takes 64323 transfers or 64323 diskbuffers before the first value is repeated.
+# (63 and 1021 are coprime, and 63 doesn't divide into TRANSFERS_PER_DISKBUFFER.)
+
+# From usbcapture.cpp
+TRANSFER_BYTES = 16384 * 16
+TRANSFERS_PER_DISKBUFFER = 256
+
+# From FPGA code
+SEQ_SHIFT = 16
+
+def simulate(seq_len, test_len):
+    seq_count = 0
+    test_count = 0
+
+    def get_word():
+        return (((seq_count >> SEQ_SHIFT) & 0x3F) << 10) + (test_count & 0x3FF)
+
+    transfer_words = TRANSFER_BYTES // 2
+
+    # Get the word at the start of the first transfer
+    initial = get_word()
+
+    # Proceed one transfer at a time, looking to see when we get the same value
+    # in the first slot of a transfer or diskbuffer.
+    #
+    # This is stronger than we really need, since the position at which the
+    # sequence counter changes also matters -- 0 0 0 1 is not the same as
+    # 0 0 1 1, even though they have the same first value. But that's OK.
+    transfers = 0
+    after_transfers = None
+    after_diskbuffers = None
+    while True:
+        seq_count = (seq_count + transfer_words) % (seq_len << SEQ_SHIFT)
+        test_count = (test_count + transfer_words) % test_len
+        transfers += 1
+
+        word = get_word()
+        #print(transfers, seq_count, (seq_count >> SEQ_SHIFT) & 0x3F, test_count, word)
+
+        if word == initial:
+            if after_transfers is None:
+                after_transfers = transfers
+            if (transfers % TRANSFERS_PER_DISKBUFFER) == 0:
+                after_diskbuffers = transfers // TRANSFERS_PER_DISKBUFFER
+                break
+
+    print(seq_len, test_len, "repeats after", after_transfers, "transfers", after_diskbuffers, "diskbuffers")
+
+for seq_len in range(60, 65):
+    for test_len in range(1020, 1025):
+        simulate(seq_len, test_len)
