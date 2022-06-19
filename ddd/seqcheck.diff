@@ -1,0 +1,79 @@
+Testing patch for DomesdayDuplicator for use with ddd-seqcheck.
+
+diff --git a/Linux-Application/DomesdayDuplicator/usbcapture.cpp b/Linux-Application/DomesdayDuplicator/usbcapture.cpp
+index 82e8b86..feb316f 100644
+--- a/Linux-Application/DomesdayDuplicator/usbcapture.cpp
++++ b/Linux-Application/DomesdayDuplicator/usbcapture.cpp
+@@ -27,6 +27,8 @@
+ 
+ #include "usbcapture.h"
+ 
++#include <atomic>
++
+ // Notes on transfer and disk buffering:
+ //
+ // TRANSFERSIZE: Each in-flight transfer returns 16 Kbytes * 16 (256 Kbytes)
+@@ -46,10 +48,14 @@
+ 
+ // Globals required for libUSB call-back handling ---------------------------------------------------------------------
+ 
++std::atomic<quint32> submitCount(0);
++std::atomic<quint32> completeCount(0);
++
+ // Structure to contain the user-data passed during transfer call-backs
+ struct transferUserDataStruct {
+     qint32 diskBufferTransferNumber;    // The transfer number of the transfer (0-2047)
+     qint32 diskBufferNumber;            // The current target disk buffer number (0-3)
++    quint32 id;
+ };
+ 
+ // Flag to indicate if disk buffer processing is running
+@@ -145,6 +151,29 @@ static void LIBUSB_CALL bulkTransferCallback(struct libusb_transfer *transfer)
+         transferFailure = true;
+     }
+ 
++#if 0
++    {
++        quint16 n = (statistics.transferCount % 511) + 512;
++        quint16 *p = (quint16 *) transfer->buffer;
++        for (int i = 0; i < (transfer->length / 2); i++) {
++            p[i] = n;
++        }
++    }
++#endif
++#if 1
++    {
++        quint16 n = (transferUserData->id % 511) + 512;
++        quint16 *p = (quint16 *) transfer->buffer;
++        for (int i = 0; i < (transfer->length / 2); i++) {
++            p[i] = n;
++        }
++    }
++#endif
++    quint32 expectId = completeCount++;
++    if (expectId != transferUserData->id) {
++        qInfo() << "Completed out of order - expected " << expectId << " got " << transferUserData->id;
++    }
++
+     // Reduce the number of requests in-flight.
+     transfersInFlight--;
+ 
+@@ -194,7 +225,9 @@ static void LIBUSB_CALL bulkTransferCallback(struct libusb_transfer *transfer)
+                                   (TRANSFERSIZE * transferUserData->diskBufferTransferNumber)),
+                                   transfer->length, bulkTransferCallback,
+                                   transfer->user_data, 1000);
++        memset(transfer->buffer, 0, transfer->length);
+ 
++        static_cast<transferUserDataStruct *>(transfer->user_data)->id = submitCount++;
+         if (libusb_submit_transfer(transfer) == 0) {
+             transfersInFlight++;
+         } else {
+@@ -333,6 +366,8 @@ void UsbCapture::run(void)
+         // Submit the transfers via libUSB
+         qDebug() << "UsbCapture::run(): Submitting the transfers";
+         for (qint32 currentTransferNumber = 0; currentTransferNumber < SIMULTANEOUSTRANSFERS; currentTransferNumber++) {
++            memset(usbTransfers[currentTransferNumber]->buffer, 0, usbTransfers[currentTransferNumber]->length);
++            static_cast<transferUserDataStruct *>(usbTransfers[currentTransferNumber]->user_data)->id = submitCount++;
+             qint32 resultCode = libusb_submit_transfer(usbTransfers[currentTransferNumber]);
+ 
+             if (resultCode >= 0) {
