@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+# Visualise PAL filters for ld-chroma-encoder.
+
+import numpy as np
+import scipy.signal as sps
+
+from showfilter import Filter, Ideal, show_filters
+
+fSC = 4433618.75
+fs = 4 * fSC
+
+filters = []
+
+for val in (1.49, 1.52, 1.55, 1.58):
+    b = sps.gaussian(13, val)
+    b /= sum(b)
+    filters.append(Filter('Gaussian %f' % val, b))
+
+uv_spec = Ideal('Clarke spec (on, over, under)',
+                np.array([0, 1.3e6, 4e6]),
+                np.array([0, -3, -20]))
+
+show_filters(filters, fs=fs, ideal_dbs=[uv_spec])

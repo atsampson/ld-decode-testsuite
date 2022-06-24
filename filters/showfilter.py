@@ -28,7 +28,7 @@ def print_filter(fil):
         consts(fil.a)
         print('};')
 
-def show_filters(filters, fs, ideal_delays=[]):
+def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
     fig, (linax, logax, grpax) = plt.subplots(3)
 
     for fil in filters:
@@ -40,6 +40,14 @@ def show_filters(filters, fs, ideal_delays=[]):
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
         grpax.plot(dw, d - d[0])
 
+    for ideal in ideal_dbs:
+        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=1000)
+        vs_interp = sint.interp1d(ideal.fs, ideal.vs, kind='quadratic')(xs)
+        logax.plot(ideal.fs, ideal.vs, 'o')
+        if ideal.tols is not None:
+            tols_interp = sint.interp1d(ideal.fs, ideal.tols, kind='quadratic')(xs)
+            logax.fill_between(xs, vs_interp - tols_interp, vs_interp + tols_interp, alpha=0.2)
+
     for ideal in ideal_delays:
         xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=1000)
         vs_interp = sint.interp1d(ideal.fs, ideal.vs, kind='quadratic')(xs)
@@ -49,7 +57,9 @@ def show_filters(filters, fs, ideal_delays=[]):
             grpax.fill_between(xs, vs_interp - tols_interp, vs_interp + tols_interp, alpha=0.2)
 
     for ax in (linax, logax, grpax):
-        if ax is grpax:
+        if ax is logax:
+            extras = [ideal.name for ideal in ideal_dbs]
+        elif ax is grpax:
             extras = [ideal.name for ideal in ideal_delays]
         else:
             extras = []
