@@ -7,8 +7,8 @@ import scipy.signal as sps
 
 from showfilter import Filter, Ideal, show_filters
 
-fs = 14318180
-freq4 = 4 * 315.0 / 88.0
+fSC = 315.0 / 88.0
+fs = 4 * fSC
 
 filters = []
 
@@ -28,10 +28,10 @@ b = sps.remez(25, # 21 isn't bad either
               fs=fs)
 filters.append(Filter('notch', b))
 
-b, a = sps.butter(1, (1.3/(freq4/2)), 'low')
+b, a = sps.butter(1, (1.3/(fs/2)), 'low')
 filters.append(Filter('colorlpi', b, a))
 
-b, a = sps.butter(1, (0.6/(freq4/2)), 'low')
+b, a = sps.butter(1, (0.6/(fs/2)), 'low')
 filters.append(Filter('colorlpq', b, a))
 
 # I/Q LPF for similarity detection
