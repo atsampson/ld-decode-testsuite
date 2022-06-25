@@ -23,6 +23,8 @@ Options:
   -V               Do everything except final encoding step
   -s FRAMES        Skip initial frames (ld-decode -s FRAMES)
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
+  -G GAIN          Set chroma gain (ld-chroma-decoder --chroma-gain GAIN)
+  -P PHASE         Set chroma phase (ld-chroma-decoder --chroma-phase PHASE)
   -d               Deinterlace before encoding
   -q STRENGTH      Denoise before encoding (hqdn3d=STRENGTH; typically 4)
   -c CRF           Set CRF for x264 (default 16)
@@ -54,13 +56,15 @@ dropouts=true
 x264crf=16
 deinterlace=false
 decoder=
+chromagain=
+chromaphase=
 discmap=false
 dryrun=false
 standard=ntsc
 denoise=
 lddargs=()
 noencode=false
-while getopts "3ABCc:Ddf:mnpq:s:V" c; do
+while getopts "3ABCc:Ddf:G:mnpP:q:s:V" c; do
 	case "$c" in
 	3)
 		analogue=false
@@ -88,6 +92,9 @@ while getopts "3ABCc:Ddf:mnpq:s:V" c; do
 	f)
 		decoder="$OPTARG"
 		;;
+	G)
+		chromagain="$OPTARG"
+		;;
 	D)
 		digital=false
 		;;
@@ -96,6 +103,9 @@ while getopts "3ABCc:Ddf:mnpq:s:V" c; do
 		;;
 	n)
 		dryrun=true
+		;;
+	P)
+		chromaphase="$OPTARG"
 		;;
 	p)
 		standard=pal
@@ -302,6 +312,12 @@ if [ ! -f "$out.mkv" ]; then
 	chcmd=(ld-chroma-decoder)
 	if [ -n "$decoder" ]; then
 		chcmd+=(-f "$decoder")
+	fi
+	if [ -n "$chromagain" ]; then
+		chcmd+=(--chroma-gain "$chromagain")
+	fi
+	if [ -n "$chromaphase" ]; then
+		chcmd+=(--chroma-phase "$chromaphase")
 	fi
 	chcmd+=(--chroma-nr 0 --luma-nr 0)
 	chcmd+=(--input-json "$prevtbc.json" - -)
