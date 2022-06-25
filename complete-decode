@@ -239,7 +239,7 @@ if [ ! -f "$out.ffmetadata" ]; then
 fi
 
 if $digital && [ ! -f "$out.digital.pcm" ]; then
-	action ld-process-efm --noninteractive "$in.efm" "$out.digital.pcm"
+	action ld-process-efm "$in.efm" "$out.digital.pcm"
 fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
