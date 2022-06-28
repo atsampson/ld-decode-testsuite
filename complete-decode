@@ -18,6 +18,7 @@ Options:
   -D               Disc has no digital audio
   -3               Disc has AC3 audio (and no right analogue channel)
   -B               Disc has bilingual analogue audio (default stereo)
+  -t               Disc is missing CDDA timestamps (ld-process-efm -t)
   -C               Don't use ld-dropout-correct
   -m               Use ld-discmap
   -V               Do everything except final encoding step
@@ -52,6 +53,7 @@ analogue=true
 analogueL=false
 analogueR=false
 digital=true
+notimestamps=false
 dropouts=true
 x264crf=16
 deinterlace=false
@@ -64,7 +66,7 @@ standard=ntsc
 denoise=
 lddargs=()
 noencode=false
-while getopts "3ABCc:Ddf:G:mnpP:q:s:V" c; do
+while getopts "3ABCc:Ddf:G:mnpP:q:s:tV" c; do
 	case "$c" in
 	3)
 		analogue=false
@@ -115,6 +117,9 @@ while getopts "3ABCc:Ddf:G:mnpP:q:s:V" c; do
 		;;
 	s)
 		lddargs+=(-s "$OPTARG")
+		;;
+	t)
+		notimestamps=true
 		;;
 	V)
 		noencode=true
@@ -239,7 +244,12 @@ if [ ! -f "$out.ffmetadata" ]; then
 fi
 
 if $digital && [ ! -f "$out.digital.pcm" ]; then
-	action ld-process-efm "$in.efm" "$out.digital.pcm"
+	efmcmd=(ld-process-efm)
+	if $notimestamps; then
+		efmcmd+=(-t)
+	fi
+	efmcmd+=("$in.efm" "$out.digital.pcm")
+	action "${efmcmd[@]}"
 fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
