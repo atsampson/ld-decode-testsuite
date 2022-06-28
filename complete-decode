@@ -322,6 +322,10 @@ if [ ! -f "$out.mkv" ]; then
 	chcmd=(ld-chroma-decoder)
 	if [ -n "$decoder" ]; then
 		chcmd+=(-f "$decoder")
+	elif [ "$standard" = pal ]; then
+		chcmd+=(-f transform3d)
+	else
+		chcmd+=(-f ntsc3d)
 	fi
 	if [ -n "$chromagain" ]; then
 		chcmd+=(--chroma-gain "$chromagain")
