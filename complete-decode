@@ -38,10 +38,11 @@ OUTPUT is the basename of the output files; if INPUT is an RF capture
 "sample.lds", it will default to "out/sample", and if INPUT is a TBC
 file it will default to its basename.
 
--p will be assumed if either filename contains _PAL_, and -D will be
-assumed if either filename contains _ANA_. As PAL discs can't have both
-analogue and digital audio, PAL discs will be assumed to have digital
-audio unless -D or _ANA_ is used.
+-p will be assumed if either filename contains _PAL_, -D will be assumed
+if either filename contains _ANA_, and -3 will be assumed if either
+filename contains _AC3_. As PAL discs can't have both analogue and
+digital audio, PAL discs will be assumed to have digital audio unless -D
+or _ANA_ is used.
 EOF
 	exit 1
 }
@@ -168,6 +169,14 @@ esac
 case "$rffile-$out" in
 *_ANA_*)
 	digital=false
+	;;
+esac
+case "$rffile-$out" in
+*_AC3_*)
+	analogue=false
+	analogueL=true
+	analogueR=false
+	ac3=true
 	;;
 esac
 if $digital && [ "$standard" = pal ]; then
