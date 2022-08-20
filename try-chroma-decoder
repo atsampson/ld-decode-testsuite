@@ -581,6 +581,7 @@ all_tests="\
 	snellwilcox ntscbars \
 	testcardg palbars palbars-kagemusha palbars-bgb leon \
 	snellwilcox-n1d \
+	snellwilcox-phasecomp \
 	snellwilcox-n3d nr-vbar-n3d nr-sweep-n3d 3dmap1 3dmap2 3dmap3 \
 	testcardg-t3ds \
 	testcardg-mono snellwilcox-mono \
@@ -659,6 +660,11 @@ run_test () {
 	snellwilcox-n1d)
 		# Snell & Wilcox test pattern from "Video Essentials"
 		decode ntsc "$testdatadir/ve-snw-cut.lds" --stillframe 15 --1d
+		;;
+
+	# ntsc2d decoder with special options
+	snellwilcox-phasecomp)
+		decode ntsc "$testdatadir/ve-snw-cut.lds" --ntsc-phase-comp
 		;;
 
 	# ntsc3d decoder
