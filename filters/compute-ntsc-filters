@@ -7,35 +7,62 @@ import scipy.signal as sps
 
 from showfilter import Filter, Ideal, show_filters
 
-fSC = 315.0 / 88.0
+fSC = 315.0e6 / 88.0
 fs = 4 * fSC
 
 filters = []
 
-b = [0.5, 0, -1.0, 0, 0.5]
-filters.append(Filter('split1D', b))
+if False:
+    b = [0.5, 0, -1.0, 0, 0.5]
+    filters.append(Filter('split1D', b))
 
-# Sharper NTSC notch filter, based on those shown in datasheets for a few
-# decoder chips. It's not much of an improvement on the above for motion
-# detection purposes.
-fsc = 315e6/88
-w1 = 1.6e6
-w2 = 0.35e6
-b = sps.remez(25, # 21 isn't bad either
-              [0, fsc-w1, fsc-w2, fsc+w2, fsc+w1, fs/2],
-              [1.0,       0.0,            1.0],
-              [1.0,       1.0,            1.0],
-              fs=fs)
-filters.append(Filter('notch', b))
+if False:
+    # Sharper NTSC notch filter, based on those shown in datasheets for a few
+    # decoder chips. It's not much of an improvement on the above for motion
+    # detection purposes.
+    w1 = 1.6e6
+    w2 = 0.35e6
+    b = sps.remez(25, # 21 isn't bad either
+                  [0, fSC-w1, fSC-w2, fSC+w2, fSC+w1, fs/2],
+                  [1.0,       0.0,            1.0],
+                  [1.0,       1.0,            1.0],
+                  fs=fs)
+    filters.append(Filter('notch', b))
 
-b, a = sps.butter(1, (1.3/(fs/2)), 'low')
-filters.append(Filter('colorlpi', b, a))
+if False:
+    # Note these are operated at *half* the usual sample rate,
+    # because they're only fed alternate samples.
+    b, a = sps.butter(1, (1.3e6/(fs/2)), 'low')
+    filters.append(Filter('colorlpi', b, a))
+    b, a = sps.butter(1, (0.6e6/(fs/2)), 'low')
+    filters.append(Filter('colorlpq', b, a))
 
-b, a = sps.butter(1, (0.6/(fs/2)), 'low')
-filters.append(Filter('colorlpq', b, a))
+if False:
+    # The frequency arg here is the -3dB point.
+    b, a = sps.butter(1, 1.3e6, fs=fs)
+    filters.append(Filter('I 1', b, a))
+    b, a = sps.butter(3, 1.3e6, fs=fs)
+    filters.append(Filter('I 3', b, a))
+    b, a = sps.butter(3, 0.6e6, fs=fs)
+    filters.append(Filter('Q 3', b, a))
 
-# I/Q LPF for similarity detection
-b, a = sps.butter(3, 0.1e6, fs=fs)
-filters.append(Filter('hardlpf', b, a))
+    # Attempt at matching the below.
+    #b, a = sps.butter(3, 2.2e6, fs=fs)
+    #filters.append(Filter('I 3b', b, a))
+
+if True:
+    # Parameters based on the Transform PAL UV filter, scaled for NTSC.
+    for n in (15, 17):
+        b = sps.remez(n, [0.0, 1.3e6, 3.8e6, fs/2], [1.0, 0.0], [1.0, 1.0], fs=fs)
+        filters.append(Filter('Remez I %d' % n, b))
+
+    for n in (13, 15):
+        b = sps.remez(n, [0.0, 0.6e6, 3.1e6, fs/2], [1.0, 0.0], [1.0, 1.0], fs=fs)
+        filters.append(Filter('Remez Q %d' % n, b))
+
+if False:
+    # I/Q LPF for similarity detection
+    b, a = sps.butter(3, 0.1e6, fs=fs)
+    filters.append(Filter('hardlpf', b, a))
 
 show_filters(filters, fs=fs)
