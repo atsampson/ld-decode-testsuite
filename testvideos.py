@@ -44,17 +44,27 @@ class TestVideo:
         self.name = name
         self.system = system
 
+    def check(self):
         os.makedirs(video_dir, exist_ok=True)
 
-        self.rgbname = os.path.join(video_dir, name + ".rgb")
+        self.rgbname = os.path.join(video_dir, self.name + ".rgb")
         if not os.path.exists(self.rgbname):
             logging.info("Generating %s", self.rgbname)
             self.generate()
 
-        self.tbcname = os.path.join(video_dir, name + ".tbc")
+        self.tbcname = os.path.join(video_dir, self.name + ".tbc")
         if not os.path.exists(self.tbcname):
             logging.info("Encoding %s", self.tbcname)
             self.encode()
+
+        # This doesn't follow the vhs-decode convention, because
+        # it's for cases where we want to decode the two files
+        # individually.
+        self.lumatbcname = os.path.join(video_dir, self.name + ".luma.tbc")
+        self.chromatbcname = os.path.join(video_dir, self.name + ".chroma.tbc")
+        if not (os.path.exists(self.lumatbcname) and os.path.exists(self.chromatbcname)):
+            logging.info("Split-encoding %s", self.tbcname)
+            self.split_encode()
 
     def generate(self):
         """Generate the .rgb through whatever mechanism.
@@ -69,6 +79,21 @@ class TestVideo:
             os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "encoder", "ld-chroma-encoder"),
             "--system", self.system,
             self.rgbname, self.tbcname,
+            ])
+
+    def split_encode(self):
+        """Encode the .rgb into luma and chroma .tbcs."""
+
+        subprocess.check_call([
+            os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "encoder", "ld-chroma-encoder"),
+            "--system", self.system,
+            self.rgbname, self.lumatbcname, self.chromatbcname,
+            ])
+        # Symlink the .json for ease of separate decoding.
+        subprocess.check_call([
+            "ln", "-sf",
+            self.lumatbcname + ".json",
+            self.chromatbcname + ".json",
             ])
 
 class LAVTestVideo(TestVideo):
@@ -128,10 +153,10 @@ class LDVTestVideo(TestVideo):
     These can be downloaded from <https://media.xiph.org/ldv/pub/test_sequences/601/>."""
 
     # XXX could download into the cache dir automatically
-    vqeg_dir = "/n/stuff/tv/Test/ldv"
+    ldv_dir = "/n/stuff/tv/Test/ldv"
 
     def __init__(self, name, yuvname):
-        self.yuvname = os.path.join(self.vqeg_dir, yuvname)
+        self.yuvname = os.path.join(self.ldv_dir, yuvname)
         super(LDVTestVideo, self).__init__(name, "PAL")
 
     def generate(self):
@@ -256,4 +281,8 @@ def get_testcases():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    get_testcases()
+
+    # Generate all the files for the testcases
+    testcases = get_testcases()
+    for name, testcase in sorted(testcases.items()):
+        testcase.check()
