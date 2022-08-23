@@ -1,0 +1,85 @@
+diff --git a/tools/ld-chroma-decoder/transformpal2d.cpp b/tools/ld-chroma-decoder/transformpal2d.cpp
+index 23a356b..d1e8cea 100644
+--- a/tools/ld-chroma-decoder/transformpal2d.cpp
++++ b/tools/ld-chroma-decoder/transformpal2d.cpp
+@@ -72,6 +72,13 @@ TransformPal2D::TransformPal2D()
+     // Plan FFTW operations
+     forwardPlan = fftw_plan_dft_r2c_2d(YTILE, XTILE, fftReal, fftComplexIn, FFTW_MEASURE);
+     inversePlan = fftw_plan_dft_c2r_2d(YTILE, XTILE, fftComplexOut, fftReal, FFTW_MEASURE);
++
++    binFile.setFileName("binstats");
++    if (!binFile.open(QIODeviceBase::Append)) {
++        qFatal("Cannot open binstats");
++    }
++    binBuffer.resize(getThresholdsSize() * 2);
++    qInfo() << getThresholdsSize() << "bins";
+ }
+ 
+ TransformPal2D::~TransformPal2D()
+@@ -198,6 +205,7 @@ void TransformPal2D::applyFilter()
+ {
+     // Get pointer to squared threshold values
+     const double *thresholdsPtr = thresholds.data();
++    float *binPtr = binBuffer.data();
+ 
+     // Clear fftComplexOut. We discard values by default; the filter only
+     // copies values that look like chroma.
+@@ -244,6 +252,12 @@ void TransformPal2D::applyFilter()
+             const fftw_complex &in_val = bi[x];
+             const fftw_complex &ref_val = bi_ref[x_ref];
+ 
++            // Get the squares of the magnitudes (to minimise the number of sqrts)
++            const double m_in_sq = fftwAbsSq(in_val);
++            *binPtr++ = static_cast<float>(m_in_sq);
++            const double m_ref_sq = fftwAbsSq(ref_val);
++            *binPtr++ = static_cast<float>(m_ref_sq);
++
+             if (x == x_ref && y == y_ref) {
+                 // This bin is its own reflection (i.e. it's a carrier). Keep it!
+                 bo[x][0] = in_val[0];
+@@ -251,10 +265,6 @@ void TransformPal2D::applyFilter()
+                 continue;
+             }
+ 
+-            // Get the squares of the magnitudes (to minimise the number of sqrts)
+-            const double m_in_sq = fftwAbsSq(in_val);
+-            const double m_ref_sq = fftwAbsSq(ref_val);
+-
+             // Compare the magnitudes of the two values, and discard both
+             // if they are more different than the threshold for this
+             // bin.
+@@ -271,6 +281,12 @@ void TransformPal2D::applyFilter()
+     }
+ 
+     assert(thresholdsPtr == thresholds.data() + thresholds.size());
++    assert(binPtr == binBuffer.data() + binBuffer.size());
++
++    qint64 size = binBuffer.size() * sizeof(*binBuffer.data());
++    if (binFile.write(reinterpret_cast<const char *>(binBuffer.data()), size) != size) {
++        qFatal("Writing to binstats failed");
++    }
+ }
+ 
+ void TransformPal2D::overlayFFTFrame(qint32 positionX, qint32 positionY,
+diff --git a/tools/ld-chroma-decoder/transformpal2d.h b/tools/ld-chroma-decoder/transformpal2d.h
+index fa26014..8753c80 100644
+--- a/tools/ld-chroma-decoder/transformpal2d.h
++++ b/tools/ld-chroma-decoder/transformpal2d.h
+@@ -28,6 +28,7 @@
+ #ifndef TRANSFORMPAL2D_H
+ #define TRANSFORMPAL2D_H
+ 
++#include <QFile>
+ #include <QVector>
+ #include <fftw3.h>
+ 
+@@ -85,6 +86,9 @@ protected:
+     // The combined result of all the FFT processing for each input field.
+     // Inverse-FFT results are accumulated into these buffers.
+     QVector<QVector<double>> chromaBuf;
++
++    QFile binFile;
++    QVector<float> binBuffer;
+ };
+ 
+ #endif
