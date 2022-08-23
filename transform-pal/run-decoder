@@ -4,6 +4,7 @@
 : \
 :
 
+dim=3d
 videodir=/d/extra/laserdisc/evaluate-video/video
 
 for mode in luma chroma; do
@@ -20,9 +21,9 @@ for mode in luma chroma; do
 		tbc="${base}.${mode}.tbc"
 
 		echo "Decoding $tbc for $mode"
-		ld-chroma-decoder -f transform2d "$tbc" /dev/null
+		ld-chroma-decoder -f transform$dim "$tbc" /dev/null
 
 	done
 
-	mv binstats binstats-all625-$mode
+	mv binstats binstats${dim}-all625-$mode
 done

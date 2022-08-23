@@ -11,10 +11,19 @@
 #include <numeric>
 #include <vector>
 
+#if 1
+// TransformPal3D
+constexpr int BINS_X = 3;
+constexpr int BINS_Y = 32;
+constexpr int BINS_Z = 8;
+constexpr int NUM_BINS = BINS_X * BINS_Y * BINS_Z;
+#else
 // TransformPal2D
 constexpr int BINS_X = 5;
 constexpr int BINS_Y = 16;
-constexpr int NUM_BINS = BINS_X * BINS_Y;
+constexpr int BINS_Z = 1;
+constexpr int NUM_BINS = BINS_X * BINS_Y * BINS_Z;
+#endif
 
 static inline float toDB(float ratio) {
     return std::abs(20.0f * std::log10(ratio));
@@ -158,22 +167,26 @@ void runTrials(int iteration, std::ifstream &lumaFile, std::ifstream &chromaFile
     }
 
     printf("Best thresholds found (dB):\n");
-    for (int bin = 0, y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++, bin++) {
-            printf("[%3d] = %8.4f, ", bin, toDB(bestThresholds[bin]));
+    for (int bin = 0, z = 0; z < BINS_Z; z++) {
+        for (int y = 0; y < BINS_Y; y++) {
+            for (int x = 0; x < BINS_X; x++, bin++) {
+                printf("[%3d] = %8.4f, ", bin, toDB(bestThresholds[bin]));
+            }
+            printf("\n");
         }
         printf("\n");
     }
-    printf("\n");
 
     printf("In threshold file form:\n");
-    for (int bin = 0, y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++, bin++) {
-            printf("%.4f ", bestThresholds[bin]);
+    for (int bin = 0, z = 0; z < BINS_Z; z++) {
+        for (int y = 0; y < BINS_Y; y++) {
+            for (int x = 0; x < BINS_X; x++, bin++) {
+                printf("%.4f ", bestThresholds[bin]);
+            }
+            printf("\n");
         }
         printf("\n");
     }
-    printf("\n");
 
     fflush(stdout);
 }

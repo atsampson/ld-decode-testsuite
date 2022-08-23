@@ -9,10 +9,19 @@
 #include <fstream>
 #include <numeric>
 
+#if 1
+// TransformPal3D
+constexpr int BINS_X = 3;
+constexpr int BINS_Y = 32;
+constexpr int BINS_Z = 8;
+constexpr int NUM_BINS = BINS_X * BINS_Y * BINS_Z;
+#else
 // TransformPal2D
 constexpr int BINS_X = 5;
 constexpr int BINS_Y = 16;
-constexpr int NUM_BINS = BINS_X * BINS_Y;
+constexpr int BINS_Z = 1;
+constexpr int NUM_BINS = BINS_X * BINS_Y * BINS_Z;
+#endif
 
 // Histogram bin sizes for imbalance levels
 constexpr int NUM_LEVELS = 20;
@@ -136,14 +145,16 @@ int main(int argc, char *argv[])
 
     printf("Mean amplitude per bin:\n");
     int bin = 0;
-    for (int y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++) {
-            printf(" %3d:%9.1f", bin, amps[bin]);
-            bin++;
+    for (int z = 0; z < BINS_Z; z++) {
+        for (int y = 0; y < BINS_Y; y++) {
+            for (int x = 0; x < BINS_X; x++) {
+                printf(" %3d:%9.1f", bin, amps[bin]);
+                bin++;
+            }
+            printf("\n");
         }
         printf("\n");
     }
-    printf("\n");
 
     std::array<uint64_t, NUM_BINS> binMaxCounts;
     for (int i = 0; i < NUM_BINS; i++) {
@@ -152,13 +163,16 @@ int main(int argc, char *argv[])
     uint64_t maxCount = *std::max_element(binMaxCounts.begin(), binMaxCounts.end());
 
     bin = 0;
-    for (int y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++) {
-            printf("Bin %d (%d, %d):\n", bin, x, y);
-            histograms[bin].show(maxCount);
-            printf("\n");
-            bin++;
+    for (int z = 0; z < BINS_Z; z++) {
+        for (int y = 0; y < BINS_Y; y++) {
+            for (int x = 0; x < BINS_X; x++) {
+                printf("Bin %d (%d, %d):\n", bin, x, y);
+                histograms[bin].show(maxCount);
+                printf("\n");
+                bin++;
+            }
         }
+        printf("\n");
     }
 
     return 0;
