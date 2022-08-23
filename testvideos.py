@@ -19,11 +19,30 @@ cache_dir = os.path.join(testsuite_dir, "cache", "evaluate")
 video_dir = os.path.join(cache_dir, "video")
 tmp_dir = "/var/tmp/lddtest/evaluate"
 
+# System parameters for interpolating into commands.
+PARAMS = {
+    "NTSC": {
+        # XXX This is wrong in ld-chroma-encoder
+        "size": "758x486", # should be "760x488",
+        "active": "758x486", # should "758x488",
+        "rate": "30000/1001",
+    },
+    "PAL": {
+        "size": "928x576",
+        "active": "922x576",
+        "rate": "25",
+    },
+}
+for params in PARAMS.values():
+    params["pad"] = params["size"].replace("x", ":")
+    params["scale"] = params["active"].replace("x", ":")
+
 class TestVideo:
     """A video testcase."""
 
-    def __init__(self, name):
+    def __init__(self, name, system):
         self.name = name
+        self.system = system
 
         os.makedirs(video_dir, exist_ok=True)
 
@@ -46,29 +65,33 @@ class TestVideo:
     def encode(self):
         """Encode the .rgb into a .tbc."""
 
-        # XXX assumes PAL
         subprocess.check_call([
             os.path.join(lddecode_dir, "tools", "ld-chroma-decoder", "encoder", "ld-chroma-encoder"),
+            "--system", self.system,
             self.rgbname, self.tbcname,
             ])
 
 class LAVTestVideo(TestVideo):
     """A video testcase generated from a libavfilter test source."""
 
-    def __init__(self, name, source):
+    def __init__(self, name, source, system):
         self.source = source
         if "=" in source:
             self.source += ":"
         else:
             self.source += "="
-        self.source += "duration=1:size=922x576:rate=25"
-        super(LAVTestVideo, self).__init__(name)
+        params = PARAMS[system]
+        self.source += "duration=1:size=%s:rate=%s" \
+                       % (params["size"], params["rate"])
+        super(LAVTestVideo, self).__init__(name, system)
 
     def generate(self):
+        params = PARAMS[self.system]
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
             "-f", "lavfi", "-i", self.source,
-            "-filter:v", "pad=928:576:-1:-1",
-            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            "-filter:v", "pad=%s:-1:-1" % params["pad"],
+            "-f", "rawvideo", "-pix_fmt", "rgb48",
+            "-s", params["size"], "-y", self.rgbname,
             ])
 
 class VQEGTestVideo(TestVideo):
@@ -80,24 +103,24 @@ class VQEGTestVideo(TestVideo):
 
     def __init__(self, name, yuvname):
         self.yuvname = os.path.join(self.vqeg_dir, yuvname)
-        super(VQEGTestVideo, self).__init__(name)
+        system = "PAL" if self.yuvname.endswith("__625.yuv") else "NTSC"
+        super(VQEGTestVideo, self).__init__(name, system)
 
     def generate(self):
-        insize = "720x576"
-        inrate = "25"
-        filters = "scale=922:576,pad=928:576:-1:-1"
-        if self.yuvname.endswith("__525.yuv"):
-            # 525-line sequence -- pad it to 625-line size.
-            # XXX For non-interlaced video, we could scale up to 625-line size instead.
+        if self.yuvname.endswith("__625.yuv"):
+            insize = "720x576"
+        else:
             insize = "720x486"
-            inrate = "29.97"
-            # To keep the right aspect ratio: scale=648:486
-            filters = "scale=922:486,pad=928:576:-1:-1"
+
+        params = PARAMS[self.system]
+        filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
-            "-f", "rawvideo", "-pix_fmt", "uyvy422", "-s", insize, "-r", inrate,
+            "-f", "rawvideo", "-pix_fmt", "uyvy422",
+            "-s", insize, "-r", params["rate"],
             "-i", self.yuvname,
             "-filter:v", filters,
-            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            "-f", "rawvideo", "-pix_fmt", "rgb48",
+            "-s", params["size"], "-y", self.rgbname,
             ])
 
 class LDVTestVideo(TestVideo):
@@ -109,14 +132,18 @@ class LDVTestVideo(TestVideo):
 
     def __init__(self, name, yuvname):
         self.yuvname = os.path.join(self.vqeg_dir, yuvname)
-        super(LDVTestVideo, self).__init__(name)
+        super(LDVTestVideo, self).__init__(name, "PAL")
 
     def generate(self):
+        params = PARAMS[self.system]
+        filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
         subprocess.check_call(["ffmpeg", "-loglevel", "error",
-            "-f", "rawvideo", "-pix_fmt", "yuv420p", "-s", "720x576", "-r", "25",
+            "-f", "rawvideo", "-pix_fmt", "yuv420p",
+            "-s", "720x576", "-r", params["rate"],
             "-i", self.yuvname,
-            "-filter:v", "scale=922:576,pad=928:576:-1:-1",
-            "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-y", self.rgbname,
+            "-filter:v", filters,
+            "-f", "rawvideo", "-pix_fmt", "rgb48",
+            "-s", params["size"], "-y", self.rgbname,
             ])
 
 def parse_ffmpeg_stats(filename, want_key):
@@ -138,6 +165,7 @@ def evaluate(testcase, decoder_args):
 
     os.makedirs(tmp_dir, exist_ok=True)
     outprefix = os.path.join(tmp_dir, testcase.name + ".out")
+    params = PARAMS[testcase.system]
 
     # Start ld-chroma-decoder with output to a pipe
     decoder_cmd = [
@@ -156,8 +184,10 @@ def evaluate(testcase, decoder_args):
     ssimname = outprefix + ".ssim"
     ffmpeg_command = [
         "ffmpeg", "-loglevel", "error",
-        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", "-",
-        "-f", "rawvideo", "-pix_fmt", "rgb48", "-s", "928x576", "-i", testcase.rgbname,
+        "-f", "rawvideo", "-pix_fmt", "rgb48",
+        "-s", params["size"], "-i", "-",
+        "-f", "rawvideo", "-pix_fmt", "rgb48",
+        "-s", params["size"], "-i", testcase.rgbname,
         "-lavfi", "[0:v][1:v]psnr=stats_file=%s; [0:v][1:v]ssim=stats_file=%s"
             % (psnrname, ssimname),
         "-f", "null", "-",
@@ -185,32 +215,35 @@ def get_testcases():
 
     testcases = {}
     for testcase in [
-        LAVTestVideo("lavfi-magenta", "color=c=0xBF00BF"),
-        LAVTestVideo("lavfi-testsrc", "testsrc"),
-        LAVTestVideo("lavfi-pal75bars", "pal75bars"),
+        LAVTestVideo("lavfi-magenta-625", "color=c=0xBF00BF", "PAL"),
+        LAVTestVideo("lavfi-magenta-525", "color=c=0xBF00BF", "NTSC"),
+        LAVTestVideo("lavfi-testsrc-625", "testsrc", "PAL"),
+        LAVTestVideo("lavfi-testsrc-525", "testsrc", "NTSC"),
+        LAVTestVideo("lavfi-pal75bars", "pal75bars", "PAL"),
+        LAVTestVideo("lavfi-smptebars", "smptebars", "NTSC"),
 
         # Names for these come from frtv_phase1_final_report.doc
-        VQEGTestVideo("vqeg-tree", "src1_ref__625.yuv"),
-        VQEGTestVideo("vqeg-barcelona", "src2_ref__625.yuv"),
-        VQEGTestVideo("vqeg-harp", "src3_ref__625.yuv"),
-        VQEGTestVideo("vqeg-movinggraphic", "src4_ref__625.yuv"),
-        VQEGTestVideo("vqeg-canoavalsesia", "src5_ref__625.yuv"),
-        VQEGTestVideo("vqeg-f1car", "src6_ref__625.yuv"),
-        VQEGTestVideo("vqeg-fries", "src7_ref__625.yuv"),
-        VQEGTestVideo("vqeg-horizontalscrolling", "src8_ref__625.yuv"),
-        VQEGTestVideo("vqeg-rugby", "src9_ref__625.yuv"),
-        VQEGTestVideo("vqeg-mobilecalendar", "src10_ref__625.yuv"),
+        VQEGTestVideo("vqeg-tree-625", "src1_ref__625.yuv"),
+        VQEGTestVideo("vqeg-barcelona-625", "src2_ref__625.yuv"),
+        VQEGTestVideo("vqeg-harp-625", "src3_ref__625.yuv"),
+        VQEGTestVideo("vqeg-movinggraphic-625", "src4_ref__625.yuv"),
+        VQEGTestVideo("vqeg-canoavalsesia-625", "src5_ref__625.yuv"),
+        VQEGTestVideo("vqeg-f1car-625", "src6_ref__625.yuv"),
+        VQEGTestVideo("vqeg-fries-625", "src7_ref__625.yuv"),
+        VQEGTestVideo("vqeg-horizontalscrolling-625", "src8_ref__625.yuv"),
+        VQEGTestVideo("vqeg-rugby-625", "src9_ref__625.yuv"),
+        VQEGTestVideo("vqeg-mobilecalendar-625", "src10_ref__625.yuv"),
 
-        VQEGTestVideo("vqeg-balloonpops", "src13_ref__525.yuv"),
-        VQEGTestVideo("vqeg-newyork", "src14_ref__525.yuv"),
-        #VQEGTestVideo("vqeg-mobilecalendar525", "src15_ref__525.yuv"),
-        VQEGTestVideo("vqeg-betespasbetes", "src16_ref__525.yuv"),
-        VQEGTestVideo("vqeg-lepoint", "src17_ref__525.yuv"),
-        VQEGTestVideo("vqeg-autumnleaves", "src18_ref__525.yuv"),
-        VQEGTestVideo("vqeg-football", "src19_ref__525.yuv"),
-        VQEGTestVideo("vqeg-sailboat", "src20_ref__525.yuv"),
-        VQEGTestVideo("vqeg-susie", "src21_ref__525.yuv"),
-        VQEGTestVideo("vqeg-tempete", "src22_ref__525.yuv"),
+        VQEGTestVideo("vqeg-balloonpops-525", "src13_ref__525.yuv"),
+        VQEGTestVideo("vqeg-newyork-525", "src14_ref__525.yuv"),
+        VQEGTestVideo("vqeg-mobilecalendar-525", "src15_ref__525.yuv"),
+        VQEGTestVideo("vqeg-betespasbetes-525", "src16_ref__525.yuv"),
+        VQEGTestVideo("vqeg-lepoint-525", "src17_ref__525.yuv"),
+        VQEGTestVideo("vqeg-autumnleaves-525", "src18_ref__525.yuv"),
+        VQEGTestVideo("vqeg-football-525", "src19_ref__525.yuv"),
+        VQEGTestVideo("vqeg-sailboat-525", "src20_ref__525.yuv"),
+        VQEGTestVideo("vqeg-susie-525", "src21_ref__525.yuv"),
+        VQEGTestVideo("vqeg-tempete-525", "src22_ref__525.yuv"),
 
         LDVTestVideo("ldv-mobcal", "576i25_mobcal_ter.yuv"),
         LDVTestVideo("ldv-parkrun", "576i25_parkrun_ter.yuv"),
