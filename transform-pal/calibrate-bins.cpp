@@ -23,6 +23,9 @@ static inline float toDB(float ratio) {
 // For each bin, the squares of the input and reflected values are recorded
 using BinBuffer = std::array<float, NUM_BINS * 2>;
 
+// For each bin, the best threshold value found so far
+using BestThresholds = std::array<float, NUM_BINS>;
+
 // Read stats from one filter operation into buffer.
 // The values returned are always greater than zero.
 // Return true on success, false on EOF.
@@ -45,20 +48,135 @@ bool readValues(std::ifstream &file, BinBuffer &buffer)
 struct Trial
 {
     Trial(float _threshold)
-        : threshold(_threshold)
+        : threshold(_threshold), correct(0.0), incorrect(0.0)
     {
-        std::fill(correct.begin(), correct.end(), 0.0);
-        std::fill(incorrect.begin(), incorrect.end(), 0.0);
     }
 
     // Threshold to test
     float threshold;
 
-    // Correct energy for each bin (chroma treated as chroma, luma as luma)
-    std::array<double, NUM_BINS> correct;
-    // Incorrect energy for each bin (chroma treated as luma, luma as chroma)
-    std::array<double, NUM_BINS> incorrect;
+    // Correct energy for this bin (chroma treated as chroma, luma as luma)
+    double correct;
+    // Incorrect energy for this bin (chroma treated as luma, luma as chroma)
+    double incorrect;
 };
+
+void runTrials(int iteration, std::ifstream &lumaFile, std::ifstream &chromaFile, BestThresholds &bestThresholds)
+{
+    printf("--- Iteration %d ---\n\n", iteration);
+
+    // We extract another digit's worth of precision on each iteration
+    const float stepSize = std::pow(10, -(iteration + 1));
+
+    // Generate the set of threshold values to try for each bin
+    std::array<std::vector<Trial>, NUM_BINS> trials;
+    for (int bin = 0; bin < NUM_BINS; bin++) {
+        for (int i = -9; i <= 9; i++) {
+            const float threshold = bestThresholds[bin] + (i * stepSize);
+            if (threshold >= 0.0 && threshold <= 1.0) trials[bin].emplace_back(threshold);
+        }
+    }
+
+    // Rewind the input files
+    lumaFile.clear();
+    lumaFile.seekg(0, std::ios::beg);
+    chromaFile.clear();
+    chromaFile.seekg(0, std::ios::beg);
+
+    BinBuffer lumaBuf, chromaBuf;
+    while (true) {
+        // Read corresponding stats from the two input files
+        if (!readValues(lumaFile, lumaBuf)) break;
+        if (!readValues(chromaFile, chromaBuf)) break;
+
+        for (int bin = 0; bin < NUM_BINS; bin++) {
+            // Get the contents of both bins from both files
+            const float lumaVal = lumaBuf[bin * 2];
+            const float lumaRef = lumaBuf[(bin * 2) + 1];
+            const float chromaVal = chromaBuf[bin * 2];
+            const float chromaRef = chromaBuf[(bin * 2) + 1];
+
+            // Sum the luma/chroma values, giving the composite values for the two bins
+            const float compVal = lumaVal + chromaRef;
+            const float compRef = lumaRef + chromaRef;
+
+            // The real code uses squared values
+            const float compValSq = compVal * compVal;
+            const float compRefSq = compRef * compRef;
+
+            // Simulate the threshold algorithm for each trial threshold value
+            for (Trial &trial: trials[bin]) {
+                const float thresholdSq = trial.threshold * trial.threshold;
+                if (compValSq < (compRefSq * thresholdSq) || compRefSq < (compValSq * thresholdSq)) {
+                    // Treat this bin's contents as luma
+                    trial.correct += static_cast<double>(lumaVal + lumaRef);
+                    trial.incorrect += static_cast<double>(chromaVal + chromaRef);
+                } else {
+                    // Treat this bin's contents as chroma
+                    trial.correct += static_cast<double>(chromaVal + chromaRef);
+                    trial.incorrect += static_cast<double>(lumaVal + lumaRef);
+                }
+            }
+        }
+    }
+
+    constexpr int BAR_WIDTH = 40;
+    char bar[BAR_WIDTH + 1];
+
+    // Summarise the results of the trials
+    for (int bin = 0; bin < NUM_BINS; bin++) {
+        printf("Bin %d:\n", bin);
+        printf("%8s %8s %15s %15s %5s\n", "Thr", "dB", "Correct", "Incorrect", "Corr%");
+
+        double bestPercent = -1.0;
+        for (const Trial &trial: trials[bin]) {
+            double percent = (100 * trial.correct) / (trial.correct + trial.incorrect);
+
+            // Show the percentage as a bar
+            int scaled = static_cast<int>((percent * BAR_WIDTH) / 100);
+            int j = 0;
+            while (j < scaled) {
+                bar[j++] = '-';
+            }
+            while (j < BAR_WIDTH) {
+                bar[j++] = ' ';
+            }
+            bar[j] = '\0';
+
+            printf("%8.4f %8.4f %15.0f %15.0f %5.1f %s\n",
+                   trial.threshold, toDB(trial.threshold),
+                   trial.correct, trial.incorrect, percent, bar);
+
+            // Is this better than one we've seen already?
+            // (Preferring lower threshold values where otherwise equal.)
+            if (percent > bestPercent) {
+                bestThresholds[bin] = trial.threshold;
+                bestPercent = percent;
+            }
+        }
+        printf("\n");
+    }
+
+    printf("Best thresholds found (dB):\n");
+    for (int bin = 0, y = 0; y < BINS_Y; y++) {
+        for (int x = 0; x < BINS_X; x++, bin++) {
+            printf("[%3d] = %8.4f, ", bin, toDB(bestThresholds[bin]));
+        }
+        printf("\n");
+    }
+    printf("\n");
+
+    printf("In threshold file form:\n");
+    for (int bin = 0, y = 0; y < BINS_Y; y++) {
+        for (int x = 0; x < BINS_X; x++, bin++) {
+            printf("%.4f ", bestThresholds[bin]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+
+    fflush(stdout);
+}
 
 int main(int argc, char *argv[])
 {
@@ -77,107 +195,14 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Cannot open %s\n", argv[2]);
         return 1;
     }
-    printf("Analysing %s and %s...\n\n", argv[1], argv[2]); 
+    printf("Analysing %s and %s...\n\n", argv[1], argv[2]);
 
-    BinBuffer lumaBuf, chromaBuf;
+    BestThresholds bestThresholds;
+    std::fill(bestThresholds.begin(), bestThresholds.end(), 0.0);
 
-    // Generate the set of threshold values to try
-    std::vector<Trial> trials;
-    for (float f = 0.0; f < 12.0; f += 0.25) {
-        trials.emplace_back(f);        
+    for (int i = 0; i < 4; i++) {
+        runTrials(i, lumaFile, chromaFile, bestThresholds);
     }
-
-    while (true) {
-        // Read corresponding stats from the two input files
-        if (!readValues(lumaFile, lumaBuf)) break;
-        if (!readValues(chromaFile, chromaBuf)) break;
-
-        for (int bin = 0; bin < NUM_BINS; bin++) {
-            // Get the contents of both bins from both files
-            const float lumaVal = lumaBuf[bin * 2];
-            const float lumaRef = lumaBuf[(bin * 2) + 1];
-            const float chromaVal = chromaBuf[bin * 2];
-            const float chromaRef = chromaBuf[(bin * 2) + 1];
-
-            // Sum the luma/chroma values, giving the composite values for the two bins
-            const float compVal = lumaVal + chromaRef;
-            const float compRef = lumaRef + chromaRef;
-
-            // Compute imbalance in dB, as seen by the composite decoder
-            const float db = toDB(compVal / compRef);
-
-            // Simulate the threshold algorithm for each trial value
-            for (Trial &trial: trials) {
-                // <= rather than < to simulate the symmetric bins correctly
-                if (db <= trial.threshold) {
-                    // Treat this bin's contents as chroma
-                    trial.correct[bin] += static_cast<double>(chromaVal + chromaRef);
-                    trial.incorrect[bin] += static_cast<double>(lumaVal + lumaRef);
-                } else {
-                    // Treat this bin's contents as luma
-                    trial.correct[bin] += static_cast<double>(lumaVal + lumaRef);
-                    trial.incorrect[bin] += static_cast<double>(chromaVal + chromaRef);
-                }
-            }
-        }
-    }
-
-    std::array<float, NUM_BINS> bestThresholds;
-
-    constexpr int BAR_WIDTH = 40;
-    char bar[BAR_WIDTH + 1];
-
-    // Summarise the results of the trials
-    for (int bin = 0; bin < NUM_BINS; bin++) {
-        printf("Bin %d:\n", bin);
-        printf("%5s %15s %15s %5s\n", "Thr", "Correct", "Incorrect", "Corr%");
-
-        double bestPercent = -1.0;
-        for (const Trial &trial: trials) {
-            double correct = trial.correct[bin];
-            double incorrect = trial.incorrect[bin];
-            double percent = (100 * correct) / (correct + incorrect);
-
-            // Show the percentage as a bar
-            int scaled = static_cast<int>((percent * BAR_WIDTH) / 100);
-            int j = 0;
-            while (j < scaled) {
-                bar[j++] = '-';
-            }
-            while (j < BAR_WIDTH) {
-                bar[j++] = ' ';
-            }
-            bar[j] = '\0';
-
-            printf("%5.2f %15.0f %15.0f %5.1f %s\n", trial.threshold, correct, incorrect, percent, bar);
-
-            // Is this better than one we've seen already?
-            // (Preferring lower threshold values where otherwise equal.)
-            if (percent > bestPercent) {
-                bestThresholds[bin] = trial.threshold;
-                bestPercent = percent;
-            }
-        }
-        printf("\n");
-    }
-
-    printf("Best thresholds found:\n");
-    for (int bin = 0, y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++, bin++) {
-            printf("[%3d] = %5.2f, ", bin, bestThresholds[bin]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-
-    printf("In threshold file form:\n");
-    for (int bin = 0, y = 0; y < BINS_Y; y++) {
-        for (int x = 0; x < BINS_X; x++, bin++) {
-            printf("%.3f ", 1.0 - std::pow(10.0f, bestThresholds[bin] / -20.0f));
-        }
-        printf("\n");
-    }
-    printf("\n");
 
     return 0;
 }
