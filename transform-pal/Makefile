@@ -1,4 +1,5 @@
 all: \
+	calibrate-bins \
 	report-bins
 
 %: %.cpp
