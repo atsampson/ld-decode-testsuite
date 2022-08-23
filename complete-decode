@@ -343,20 +343,10 @@ if [ ! -f "$out.mkv" ]; then
 		chcmd+=(--chroma-phase "$chromaphase")
 	fi
 	chcmd+=(--chroma-nr 0 --luma-nr 0)
+	chcmd+=(--output-format y4m)
 	chcmd+=(--input-json "$prevtbc.json" - -)
 
-	ffcmd=(ffmpeg -f rawvideo -pix_fmt rgb48)
-	# The active width is ceil(4 * fSC * activePeriod).
-	if [ "$standard" = pal ]; then
-		ffcmd+=(-r 25 -s 928x576)
-		# PAL: 4 * 4433618.75 * 51.95e-6
-		filters="crop=922:576,setdar=4/3"
-	else
-		ffcmd+=(-r 30000/1001 -s 760x488)
-		# NTSC: 4 * 3579545.45.. * 52.9e-6
-		filters="crop=758:488,setdar=4/3"
-	fi
-	ffcmd+=(-i -)
+	ffcmd=(ffmpeg -f yuv4mpegpipe -i -)
 	streams=0
 	audiostreams=()
 	if $digital; then
@@ -390,19 +380,18 @@ if [ ! -f "$out.mkv" ]; then
 		ffcmd+=(-map $i:0)
 	done
 	ffcmd+=(-map_metadata $metadatastream)
-	filters="$filters,setfield=tff"
+	filters=""
 	if $deinterlace; then
 		filters="$filters,bwdif"
 	fi
 	if [ -n "$denoise" ]; then
 		filters="$filters,hqdn3d=$denoise"
 	fi
+	if [ -n "$filters" ]; then
+		ffcmd+=(-filter:v "${filters#,}")
+	fi
 	# Use yuvj444p for full range and no chroma subsampling.
-	ffcmd+=( \
-		-filter:v "$filters" \
-		-pix_fmt yuvj444p \
-		-codec:v libx264 -crf "$x264crf" \
-	)
+	ffcmd+=(-pix_fmt yuvj444p -codec:v libx264 -crf "$x264crf")
 	if ! $deinterlace; then
 		ffcmd+=(-flags +ildct+ilme)
 	fi
