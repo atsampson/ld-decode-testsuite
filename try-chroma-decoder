@@ -497,7 +497,6 @@ benchmark () {
 			;;
 		esac
 	fi
-	# XXX check for --transform-mode support
 
 	# Get the number of CPUs, and go a little beyond that in case that works better
 	maxcpus=$(grep ^processor /proc/cpuinfo | wc -l)
@@ -598,7 +597,7 @@ done
 for decoder in t2d t3d t3df; do
 	all_tests="$all_tests testcardg-$decoder palbars-$decoder pr-sweep-$decoder"
 	if [ "$decoder" != "t3df" ]; then
-		all_tests="$all_tests testcardg-$decoder-thresh0.3 testcardg-$decoder-level"
+		all_tests="$all_tests testcardg-$decoder-thresh0.3"
 	fi
 	for frame in 2 25 122 123 155; do
 		all_tests="$all_tests pr-motion$frame-$decoder"
@@ -698,11 +697,7 @@ run_test () {
 		;;
 	testcardg-t2d-thresh0.3)
 		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1 \
-			--transform-mode threshold --transform-threshold 0.3
-		;;
-	testcardg-t2d-level)
-		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform2d -l 1 \
-			--transform-mode level
+			--transform-threshold 0.3
 		;;
 	palbars-t2d)
 		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform2d -l 1
@@ -724,11 +719,7 @@ run_test () {
 		;;
 	testcardg-t3d-thresh0.3)
 		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3d -l 1 \
-			--transform-mode threshold --transform-threshold 0.3
-		;;
-	testcardg-t3d-level)
-		decode pal "$testdatadir/pal/jason-testpattern.lds" --decoder transform3d -l 1 \
-			--transform-mode level
+			--transform-threshold 0.3
 		;;
 	palbars-t3d)
 		decode pal "$testdatadir/pal/jason-cbar1.lds" --decoder transform3d -l 1
