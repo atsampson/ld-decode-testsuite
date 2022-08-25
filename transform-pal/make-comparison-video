@@ -1,0 +1,70 @@
+#!/bin/bash -e
+
+sndir="/n/stuff2/capture/laserdisc/BBC/StephenNeal-captures"
+
+fieldoffset=0
+aspect=4/3
+
+#inputvideo="$sndir/carousel_component.short.mov"
+#inputvideo="$sndir/dick_component.short.mov"
+#inputvideo="$sndir/hv_swinging_bars_component.short.mov"
+#inputvideo="$sndir/mobcal_component.short.mov"; fieldoffset=2
+inputvideo="$sndir/newpat_component.short.mov"
+#inputvideo="$sndir/SVT_component_16_9_flagged.mov"; aspect=16/9
+#inputvideo="$sndir/wheel_component.short.mov"; fieldoffset=2
+#inputvideo="$sndir/xc_couple_component.short.mov"; fieldoffset=6; aspect=16/9
+
+# Find the corresponding hardware decoder video.
+refvideo=$(echo $sndir/$(basename "$inputvideo" | sed 's/_comp.*//')*transform_hw_decode*.mov)
+
+#refvideo="$inputvideo"
+
+tbc="/d/extra/laserdisc/out/comparison.tbc"
+outvideo="/d/extra/laserdisc/out/comparison.mov"
+
+# Encode the input video into TBC form.
+
+if true; then
+echo "Encoding $inputvideo -> $tbc"
+ffmpeg \
+	-i "$inputvideo" \
+	-filter:v "scale=922:576,pad=928:576:-1:-1" \
+	-s 928x576 -r pal -f rawvideo -pix_fmt rgb48 - | \
+ld-chroma-encoder \
+	--sc-locked \
+	--field-offset $fieldoffset \
+	- "$tbc"
+fi
+
+# Decode and combine with the reference video.
+
+echo "Decoding $tbc + $refvideo to $outvideo"
+
+deccmd=(ld-chroma-decoder)
+deccmd+=(-f transform3d)
+#deccmd+=(--transform-threshold 0.4)
+deccmd+=(--transform-thresholds thresholds3d-all625)
+deccmd+=(--chroma-nr 0 --luma-nr 0)
+deccmd+=(--simple-pal)
+deccmd+=(--output-format y4m)
+deccmd+=("$tbc" -)
+
+ffcmd=(ffmpeg)
+ffcmd+=(-i "$refvideo")
+ffcmd+=(-f yuv4mpegpipe -i -)
+
+combine="hstack"
+#combine="blend=all_expr=if(floor(mod(N/12\,2))\,B\,A)"
+
+textargs="x=w-tw:y=0:box=1:boxborderw=2:fontsize=20"
+ffcmd+=(-filter_complex "
+	[0:v] scale=922:576, setdar=$aspect, drawtext=text=HW:$textargs [ref];
+	[1:v] crop=922:576, setdar=$aspect, drawtext=text=SW:$textargs [dec];
+	[ref] [dec] $combine
+")
+
+ffcmd+=(-codec:v v210)
+#ffcmd+=(-codec:v ffv1)
+ffcmd+=(-an -y "$outvideo")
+
+"${deccmd[@]}" | "${ffcmd[@]}"
