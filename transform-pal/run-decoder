@@ -15,6 +15,7 @@ for mode in luma chroma; do
 		$videodir/lavfi-pal75bars.rgb \
 		$videodir/ldv-*.rgb \
 		$videodir/vqeg-*-625.rgb \
+		$videodir/svt-*.rgb \
 		; do
 
 		base="${rgb%.rgb}"

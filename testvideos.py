@@ -178,6 +178,29 @@ class LDVTestVideo(TestVideo):
             "-s", params["size"], "-y", self.rgbname,
             ])
 
+class SVTTestVideo(TestVideo):
+    """A video testcase generated from one of the 2160p MultiFormat test sequences produced by SVT.
+    These can be downloaded from <https://media.xiph.org/video/derf/y4m/>."""
+
+    # XXX these are all 16:9 aspect ratio
+    # XXX could download into the cache dir automatically
+    ldv_dir = "/n/stuff/tv/Test/svt"
+
+    def __init__(self, name, yuvname):
+        self.yuvname = os.path.join(self.ldv_dir, yuvname)
+        super(SVTTestVideo, self).__init__(name, "PAL")
+
+    def generate(self):
+        params = PARAMS[self.system]
+        filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
+        subprocess.check_call(FFMPEG + [
+            "-f", "yuv4mpegpipe", "-r", params["rate"],
+            "-i", self.yuvname,
+            "-filter:v", filters,
+            "-f", "rawvideo", "-pix_fmt", "rgb48",
+            "-s", params["size"], "-y", self.rgbname,
+            ])
+
 def parse_ffmpeg_stats(filename, want_key):
     """Read a stats file from ffmpeg's psnr or ssim filter.
     Return a list of float values with the given key."""
@@ -280,6 +303,12 @@ def get_testcases():
         LDVTestVideo("ldv-parkrun", "576i25_parkrun_ter.yuv"),
         LDVTestVideo("ldv-shields", "576i25_shields_ter.yuv"),
         LDVTestVideo("ldv-stockholm", "576i25_stockholm_ter.yuv"),
+
+        SVTTestVideo("svt-crowdrun", "crowd_run_2160p50.y4m"),
+        SVTTestVideo("svt-duckstakeoff", "ducks_take_off_2160p50.y4m"),
+        SVTTestVideo("svt-intotree", "in_to_tree_2160p50.y4m"),
+        SVTTestVideo("svt-oldtowncross", "old_town_cross_2160p50.y4m"),
+        SVTTestVideo("svt-parkjoy", "park_joy_2160p50.y4m"),
         ]:
         testcases[testcase.name] = testcase
 
