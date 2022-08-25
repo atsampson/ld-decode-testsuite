@@ -37,6 +37,13 @@ for params in PARAMS.values():
     params["pad"] = params["size"].replace("x", ":")
     params["scale"] = params["active"].replace("x", ":")
 
+# Common args for ffmpeg.
+FFMPEG = [
+    "ffmpeg",
+    "-loglevel", "error",
+    "-sws_flags", "lanczos",
+    ]
+
 class TestVideo:
     """A video testcase."""
 
@@ -112,7 +119,7 @@ class LAVTestVideo(TestVideo):
 
     def generate(self):
         params = PARAMS[self.system]
-        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+        subprocess.check_call(FFMPEG + [
             "-f", "lavfi", "-i", self.source,
             "-filter:v", "pad=%s:-1:-1" % params["pad"],
             "-f", "rawvideo", "-pix_fmt", "rgb48",
@@ -139,7 +146,7 @@ class VQEGTestVideo(TestVideo):
 
         params = PARAMS[self.system]
         filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
-        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+        subprocess.check_call(FFMPEG + [
             "-f", "rawvideo", "-pix_fmt", "uyvy422",
             "-s", insize, "-r", params["rate"],
             "-i", self.yuvname,
@@ -162,7 +169,7 @@ class LDVTestVideo(TestVideo):
     def generate(self):
         params = PARAMS[self.system]
         filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
-        subprocess.check_call(["ffmpeg", "-loglevel", "error",
+        subprocess.check_call(FFMPEG + [
             "-f", "rawvideo", "-pix_fmt", "yuv420p",
             "-s", "720x576", "-r", params["rate"],
             "-i", self.yuvname,
@@ -207,8 +214,7 @@ def evaluate(testcase, decoder_args):
     # The values returned may be "inf" if the output is identical to the input...
     psnrname = outprefix + ".psnr"
     ssimname = outprefix + ".ssim"
-    ffmpeg_command = [
-        "ffmpeg", "-loglevel", "error",
+    ffmpeg_command = FFMPEG + [
         "-f", "rawvideo", "-pix_fmt", "rgb48",
         "-s", params["size"], "-i", "-",
         "-f", "rawvideo", "-pix_fmt", "rgb48",
