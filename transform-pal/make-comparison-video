@@ -58,7 +58,7 @@ ffcmd+=(-f yuv4mpegpipe -i -)
 combine="hstack"
 #combine="blend=all_expr=if(floor(mod(N/12\,2))\,B\,A)"
 
-textargs="x=w-tw:y=0:box=1:boxborderw=2:fontsize=20"
+textargs="x=w-tw-2:y=2:box=1:boxborderw=2:fontsize=20"
 ffcmd+=(-filter_complex "
 	[0:v] scale=922:576, setdar=$aspect, drawtext=text=HW:$textargs [ref];
 	[1:v] crop=922:576, setdar=$aspect, drawtext=text=SW:$textargs [dec];
