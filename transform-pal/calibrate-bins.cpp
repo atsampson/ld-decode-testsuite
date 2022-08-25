@@ -36,20 +36,12 @@ using BinBuffer = std::array<float, NUM_BINS * 2>;
 using BestThresholds = std::array<float, NUM_BINS>;
 
 // Read stats from one filter operation into buffer.
-// The values returned are always greater than zero.
+// The values returned are the squares of the magnitudes (and may be zero).
 // Return true on success, false on EOF.
 bool readValues(std::ifstream &file, BinBuffer &buffer)
 {
     file.read(reinterpret_cast<char *>(buffer.data()), buffer.size() * sizeof(*buffer.data()));
     if (file.eof()) return false;
-
-    for (float &f: buffer) {
-        // Get the magnitude of this bin
-        f = std::sqrt(f);
-
-        // Avoid division by zero later, by clamping to a small value
-        if (f < 1e-9f) f = 1e-9f;
-    }
 
     return true;
 }
@@ -70,7 +62,8 @@ struct Trial
     double incorrect;
 };
 
-void runTrials(int iteration, std::ifstream &lumaFile, std::ifstream &chromaFile, BestThresholds &bestThresholds)
+void runTrials(int iteration, std::ifstream &compFile, std::ifstream &lumaFile, std::ifstream &chromaFile,
+               BestThresholds &bestThresholds)
 {
     printf("--- Iteration %d ---\n\n", iteration);
 
@@ -87,31 +80,30 @@ void runTrials(int iteration, std::ifstream &lumaFile, std::ifstream &chromaFile
     }
 
     // Rewind the input files
+    compFile.clear();
+    compFile.seekg(0, std::ios::beg);
     lumaFile.clear();
     lumaFile.seekg(0, std::ios::beg);
     chromaFile.clear();
     chromaFile.seekg(0, std::ios::beg);
 
-    BinBuffer lumaBuf, chromaBuf;
+    BinBuffer compBuf, lumaBuf, chromaBuf;
     while (true) {
-        // Read corresponding stats from the two input files
+        // Read corresponding stats from the input files
+        if (!readValues(compFile, compBuf)) break;
         if (!readValues(lumaFile, lumaBuf)) break;
         if (!readValues(chromaFile, chromaBuf)) break;
 
         for (int bin = 0; bin < NUM_BINS; bin++) {
-            // Get the contents of both bins from both files
-            const float lumaVal = lumaBuf[bin * 2];
-            const float lumaRef = lumaBuf[(bin * 2) + 1];
-            const float chromaVal = chromaBuf[bin * 2];
-            const float chromaRef = chromaBuf[(bin * 2) + 1];
+            // Get the squared magnitudes of both bins from the composite file
+            const float compValSq = compBuf[bin * 2];
+            const float compRefSq = compBuf[(bin * 2) + 1];
 
-            // Sum the luma/chroma values, giving the composite values for the two bins
-            const float compVal = lumaVal + chromaRef;
-            const float compRef = lumaRef + chromaRef;
-
-            // The real code uses squared values
-            const float compValSq = compVal * compVal;
-            const float compRefSq = compRef * compRef;
+            // Get the magnitudes of both bins from the luma/chroma files
+            const float lumaVal = std::sqrt(lumaBuf[bin * 2]);
+            const float lumaRef = std::sqrt(lumaBuf[(bin * 2) + 1]);
+            const float chromaVal = std::sqrt(chromaBuf[bin * 2]);
+            const float chromaRef = std::sqrt(chromaBuf[(bin * 2) + 1]);
 
             // Simulate the threshold algorithm for each trial threshold value
             for (Trial &trial: trials[bin]) {
@@ -193,28 +185,33 @@ void runTrials(int iteration, std::ifstream &lumaFile, std::ifstream &chromaFile
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3) {
-        fprintf(stderr, "Usage: calibrate-bins BINSTATS-LUMA BINSTATS-CHROMA\n");
+    if (argc < 4) {
+        fprintf(stderr, "Usage: calibrate-bins BINSTATS-COMPOSITE BINSTATS-LUMA BINSTATS-CHROMA\n");
         return 1;
     }
 
-    std::ifstream lumaFile(argv[1]);
-    if (!lumaFile) {
+    std::ifstream compFile(argv[1]);
+    if (!compFile) {
         fprintf(stderr, "Cannot open %s\n", argv[1]);
         return 1;
     }
-    std::ifstream chromaFile(argv[2]);
-    if (!chromaFile) {
+    std::ifstream lumaFile(argv[2]);
+    if (!lumaFile) {
         fprintf(stderr, "Cannot open %s\n", argv[2]);
         return 1;
     }
-    printf("Analysing %s and %s...\n\n", argv[1], argv[2]);
+    std::ifstream chromaFile(argv[3]);
+    if (!chromaFile) {
+        fprintf(stderr, "Cannot open %s\n", argv[3]);
+        return 1;
+    }
+    printf("Analysing %s, %s and %s...\n\n", argv[1], argv[2], argv[3]);
 
     BestThresholds bestThresholds;
     std::fill(bestThresholds.begin(), bestThresholds.end(), 0.0);
 
     for (int i = 0; i < 4; i++) {
-        runTrials(i, lumaFile, chromaFile, bestThresholds);
+        runTrials(i, compFile, lumaFile, chromaFile, bestThresholds);
     }
 
     return 0;

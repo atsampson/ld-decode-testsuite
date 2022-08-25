@@ -7,7 +7,7 @@
 dim=3d
 videodir=/d/extra/laserdisc/evaluate-video/video
 
-for mode in luma chroma; do
+for mode in composite luma chroma; do
 	rm -f binstats
 
 	for rgb in \
@@ -19,7 +19,11 @@ for mode in luma chroma; do
 		; do
 
 		base="${rgb%.rgb}"
-		tbc="${base}.${mode}.tbc"
+		if [ "$mode" = "composite" ]; then
+			tbc="${base}.tbc"
+		else
+			tbc="${base}.${mode}.tbc"
+		fi
 
 		echo "Decoding $tbc for $mode"
 		ld-chroma-decoder -f transform$dim "$tbc" /dev/null
