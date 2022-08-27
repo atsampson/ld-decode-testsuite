@@ -201,6 +201,26 @@ class SVTTestVideo(TestVideo):
             "-s", params["size"], "-y", self.rgbname,
             ])
 
+class BBCTestVideo(TestVideo):
+    """A video testcase generated from a BBC 576i component test video.
+    These are not publically available (as far as I know)."""
+
+    sn_dir = "/n/stuff2/capture/laserdisc/BBC/StephenNeal-captures"
+
+    def __init__(self, name, movname):
+        self.movname = os.path.join(self.sn_dir, movname)
+        super(BBCTestVideo, self).__init__(name, "PAL")
+
+    def generate(self):
+        params = PARAMS[self.system]
+        filters = "scale=%s,pad=%s:-1:-1" % (params["scale"], params["pad"])
+        subprocess.check_call(FFMPEG + [
+            "-i", self.movname,
+            "-filter:v", filters,
+            "-f", "rawvideo", "-pix_fmt", "rgb48",
+            "-s", params["size"], "-y", self.rgbname,
+            ])
+
 def parse_ffmpeg_stats(filename, want_key):
     """Read a stats file from ffmpeg's psnr or ssim filter.
     Return a list of float values with the given key."""
@@ -309,6 +329,14 @@ def get_testcases():
         SVTTestVideo("svt-intotree", "in_to_tree_2160p50.y4m"),
         SVTTestVideo("svt-oldtowncross", "old_town_cross_2160p50.y4m"),
         SVTTestVideo("svt-parkjoy", "park_joy_2160p50.y4m"),
+
+        BBCTestVideo("bbc-carousel", "carousel_component.short.mov"),
+        BBCTestVideo("bbc-dick", "dick_component.short.mov"),
+        BBCTestVideo("bbc-swingingbars", "hv_swinging_bars_component.short.mov"),
+        BBCTestVideo("bbc-mobcal", "mobcal_component.short.mov"),
+        BBCTestVideo("bbc-newpat", "newpat_component.short.mov"),
+        BBCTestVideo("bbc-wheel", "wheel_component.short.mov"),
+        BBCTestVideo("bbc-xccouple", "xc_couple_component.short.mov"),
         ]:
         testcases[testcase.name] = testcase
 
