@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import sys
+
 # From f3frame.h in ld-process-efm
 EFM = [
     0x1220, 0x2100, 0x2420, 0x2220, 0x1100, 0x0110, 0x0420, 0x0900,
@@ -36,33 +38,94 @@ EFM = [
     0x1212, 0x2012, 0x2412, 0x2212, 0x1012, 0x0212, 0x0412, 0x0812,
     ]
 
+# i7-9700KF has 64 KiB L1 cache per core.
+# Raspberry Pi 4 has 32 KiB L1 cache per core.
+# So we're aiming to fit well within that...
 
-def test(show, a, b, c, d):
+def test(show, a, b, c, d, offset=0):
+    # 337, 0 0 0 7 = 453
+    # 350, 0 0 0 1 = 426
+    # 351, 0 1 12 13 = 406
+    # 356, 0 0 0 1 = 385
+    TABLE_SIZE = 512
+    hashtable = [None for i in range(TABLE_SIZE)]
+
+    def efmhash(efm):
+        #v = ((efm >> a) ^ (efm >> b) ^ (efm << c) ^ (efm << d))   # max 2
+        v = ((efm >> a) ^ (efm >> b) ^ (efm >> c) ^ (efm >> d))   # max 2
+        #v = (efm ^ (efm >> 1) ^ (efm >> 3) ^ (efm >> 7))   # 2
+        return v % TABLE_SIZE
+
     buckets = {}
     for value in range(256):
+        # There may be an advantage to populating the hashtable starting from a
+        # different position (to get the collisions in different places...)
+        # (As it turns out: no, there isn't.)
+        value = (value + offset) % 256
+
         efm = EFM[value]
-        #h = ((efm >> a) ^ (efm >> b) ^ (efm << c) ^ (efm << d)) & 0xFF   # max 2
-        h = ((efm >> a) ^ (efm >> b) ^ (efm >> c) ^ (efm >> d)) & 0xFF   # max 2
-        #h = (efm ^ (efm >> 1) ^ (efm >> 3) ^ (efm >> 7)) & 0xFF   # 2
+        h = efmhash(efm)
         buckets.setdefault(h, []).append((efm, value))
 
+        # Populate the OA hash table
+        pos = h
+        while hashtable[pos] is not None:
+            pos = (pos + 1) % TABLE_SIZE
+        hashtable[pos] = (efm, value)
+
+    # Count the maximum number of hash collisions with this hash
     max_colls = max(len(pairs) for pairs in buckets.values())
     if show:
         for h, pairs in sorted(buckets.items()):
             if len(pairs) > 0:
                 print(h, pairs)
-    return max_colls
+    #return max_colls
 
-best_max = 256
+    #print(a, b, c, d, hashtable)
+
+    # Simulate looking up each value in the hash table
+    total_reads = 0
+    for efm in EFM:
+        pos = efmhash(efm)
+        #print("EFM", efm, "hash", pos, end=" ")
+        total_reads += 1
+        while hashtable[pos][0] != efm:
+            total_reads += 1
+            pos = (pos + 1) % TABLE_SIZE
+            #print(pos, end=" ")
+        #print()
+    return total_reads
+
+if False:
+    result = test(False, 0, 1, 3, 7)
+    print("Result:", result, "Per value:", result / 256)
+    sys.exit(0)
+
+# Tune the hash function
+best_max = 1e100
 best_args = None
 for a in range(14):
     for b in range(14):
         for c in range(14):
             for d in range(14):
                 args = [a, b, c, d]
-                max_colls = test(False, *args)
-                if max_colls < best_max:
-                    best_max = max_colls
+                result = test(False, *args)
+                if result < best_max:
+                    best_max = result
                     best_args = args
         print(a, b, "Best:", " ".join("%4d" % i for i in best_args), "Max:", best_max)
+
+# Tune the offset
+best_max = 1e100
+hash_args = best_args
+best_args = None
+for offset in range(256):
+    args = hash_args + [offset]
+    result = test(False, *args)
+    print("Offset:", offset, "Result:", result)
+    if result < best_max:
+        best_max = result
+        best_args = args
+
+print("Best args:", best_args)
 test(True, *best_args)
