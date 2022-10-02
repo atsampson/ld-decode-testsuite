@@ -3,6 +3,11 @@
 
 testsuitedir="$(realpath $(dirname $0))"
 ldddir="$(realpath $testsuitedir/../ld-decode)"
+if [ -d "$ldddir/obj" ]; then
+	objdir="$ldddir/obj"
+else
+	objdir="$ldddir"
+fi
 
 prefix="$HOME/pkg/ld-decode"
 
@@ -12,19 +17,19 @@ for f in \
 	"$ldddir/cx-expander" \
 	"$ldddir/ld-cut" \
 	"$ldddir/ld-decode" \
-	"$ldddir/ld-ldf-reader" \
+	"$objdir/ld-ldf-reader" \
 	"$ldddir/scripts/ld-compress" \
-	"$ldddir/tools/ld-analyse/ld-analyse" \
-	"$ldddir/tools/ld-chroma-decoder/encoder/ld-chroma-encoder" \
-	"$ldddir/tools/ld-chroma-decoder/ld-chroma-decoder" \
-	"$ldddir/tools/ld-diffdod/ld-diffdod" \
-	"$ldddir/tools/ld-discmap/ld-discmap" \
-	"$ldddir/tools/ld-dropout-correct/ld-dropout-correct" \
-	"$ldddir/tools/ld-export-metadata/ld-export-metadata" \
-	"$ldddir/tools/ld-lds-converter/ld-lds-converter" \
-	"$ldddir/tools/ld-ldstoefm/ld-ldstoefm" \
-	"$ldddir/tools/ld-process-efm/ld-process-efm" \
-	"$ldddir/tools/ld-process-vbi/ld-process-vbi" \
+	"$objdir/tools/ld-analyse/ld-analyse" \
+	"$objdir/tools/ld-chroma-decoder/encoder/ld-chroma-encoder" \
+	"$objdir/tools/ld-chroma-decoder/ld-chroma-decoder" \
+	"$objdir/tools/ld-diffdod/ld-diffdod" \
+	"$objdir/tools/ld-discmap/ld-discmap" \
+	"$objdir/tools/ld-dropout-correct/ld-dropout-correct" \
+	"$objdir/tools/ld-export-metadata/ld-export-metadata" \
+	"$objdir/tools/ld-lds-converter/ld-lds-converter" \
+	"$objdir/tools/ld-ldstoefm/ld-ldstoefm" \
+	"$objdir/tools/ld-process-efm/ld-process-efm" \
+	"$objdir/tools/ld-process-vbi/ld-process-vbi" \
 	; do
 	if [ -f "$f" ]; then
 		ln -sf "$f" "$prefix/bin/"
