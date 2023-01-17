@@ -28,6 +28,8 @@ for f in \
 	"$objdir/tools/ld-export-metadata/ld-export-metadata" \
 	"$objdir/tools/ld-lds-converter/ld-lds-converter" \
 	"$objdir/tools/ld-ldstoefm/ld-ldstoefm" \
+	"$objdir/tools/ld-process-ac3/decode/ld-ac3-decode" \
+	"$objdir/tools/ld-process-ac3/demodulate/ld-ac3-demodulate" \
 	"$objdir/tools/ld-process-efm/ld-process-efm" \
 	"$objdir/tools/ld-process-vbi/ld-process-vbi" \
 	; do
