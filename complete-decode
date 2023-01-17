@@ -259,6 +259,10 @@ if $digital && [ ! -f "$out.digital.pcm" ]; then
 	fi
 	efmcmd+=("$in.efm" "$out.digital.pcm")
 	action "${efmcmd[@]}"
+	if grep >/dev/null 'Audio samples: 0$' "$out".efm.log; then
+		echo >&2 "EFM processing found no digital audio (may need -t?)"
+		exit 1
+	fi
 fi
 
 if $digital && [ ! -f "$out.digital.flac" ]; then
