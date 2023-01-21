@@ -5,7 +5,7 @@
 # FIXME: Detect audio configuration automatically from the VBI
 # FIXME: Do this with short PAL/NTSC CAV/CLV examples with -fsanitize={undefined,address}...
 # FIXME: Clean up intermediate files (.map) once complete
-# FIXME: Extract CC or Teletext subtitles from the VBI
+# FIXME: Extract Teletext subtitles
 
 usage () {
 	cat >&2 <<EOF
@@ -19,6 +19,7 @@ Options:
   -3               Disc has AC3 audio (and no right analogue channel)
   -B               Disc has bilingual analogue audio (default stereo)
   -t               Disc is missing CDDA timestamps (ld-process-efm -t)
+  -T               Don't attempt to decode subtitles
   -C               Don't use ld-dropout-correct
   -m               Use ld-discmap
   -V               Do everything except final encoding step
@@ -53,6 +54,7 @@ ac3=false
 analogue=true
 analogueL=false
 analogueR=false
+cc1=true
 digital=true
 notimestamps=false
 dropouts=true
@@ -67,7 +69,7 @@ standard=ntsc
 denoise=
 lddargs=()
 noencode=false
-while getopts "3ABCc:Ddf:G:mnpP:q:s:tV" c; do
+while getopts "3ABCc:Ddf:G:mnpP:q:s:tTV" c; do
 	case "$c" in
 	3)
 		analogue=false
@@ -121,6 +123,9 @@ while getopts "3ABCc:Ddf:G:mnpP:q:s:tV" c; do
 		;;
 	t)
 		notimestamps=true
+		;;
+	T)
+		cc1=false
 		;;
 	V)
 		noencode=true
@@ -255,6 +260,20 @@ if [ ! -f "$out.ffmetadata" ]; then
 	action ld-export-metadata --ffmetadata "$out.ffmetadata" "$out.vbi.json"
 fi
 
+# XXX Support CC2-4 (once ld-export-metadata does)
+if [ ! -f "$out.cc1.scc" ]; then
+	action ld-export-metadata --closed-captions "$out.cc1.scc" "$out.vbi.json"
+fi
+
+# Only encode Closed Caption streams if there are any captions
+if $cc1 && grep >/dev/null '^[0-9]' "$out.cc1.scc"; then
+	if [ ! -f "$out.cc1.srt" ]; then
+		action tt convert -i "$out.cc1.scc" -o "$out.cc1.srt"
+	fi
+else
+	cc1=false
+fi
+
 if $digital && [ ! -f "$out.digital.pcm" ]; then
 	efmcmd=(ld-process-efm)
 	if $notimestamps; then
@@ -386,6 +405,12 @@ if [ ! -f "$out.mkv" ]; then
 		audiostreams+=($streams)
 		streams=$(($streams + 1))
 	fi
+	subtitlestreams=()
+	if $cc1; then
+		ffcmd+=(-i "$out".cc1.srt)
+		subtitlestreams+=($streams)
+		streams=$(($streams + 1))
+	fi
 	ffcmd+=(-i "$out".ffmetadata)
 	metadatastream=$streams
 	for i in $(seq 0 $streams); do
@@ -409,6 +434,9 @@ if [ ! -f "$out.mkv" ]; then
 	fi
 	for stream in "${audiostreams[@]}"; do
 		ffcmd+=(-codec:a:$stream copy)
+	done
+	for stream in "${subtitlestreams[@]}"; do
+		ffcmd+=(-codec:s:$stream copy)
 	done
 	ffcmd+=(-y "$out".mkv)
 
