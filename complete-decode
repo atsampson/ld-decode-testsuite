@@ -211,11 +211,14 @@ action () {
 }
 
 if [ -n "$rffile" -a ! -f "$in.tbc" ]; then
-	if ! $analogue; then
+	if ! ($analogue || $analogueL || $analogueR); then
 		lddargs+=(--daa)
 	fi
 	if ! $digital; then
 		lddargs+=(--noEFM)
+	fi
+	if $ac3; then
+		lddargs+=(--AC3)
 	fi
 	action ld-decode "--$standard" "${lddargs[@]}" "$rffile" "$in"
 fi
@@ -370,6 +373,11 @@ if [ ! -f "$out.mkv" ]; then
 	fi
 	if $analogueR; then
 		ffcmd+=(-i "$out".analogueR.flac)
+		audiostreams+=($streams)
+		streams=$(($streams + 1))
+	fi
+	if $ac3; then
+		ffcmd+=(-i "$out".ac3)
 		audiostreams+=($streams)
 		streams=$(($streams + 1))
 	fi
