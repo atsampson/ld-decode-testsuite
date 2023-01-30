@@ -1,0 +1,40 @@
+<Qucs Schematic 1.0.0>
+<Properties>
+  <View=-43,40,1710,1526,1,43,240>
+  <Grid=10,10,0>
+  <DataSet=ldv4300d-efm-filter.dat>
+  <DataDisplay=ldv4300d-efm-filter.sch>
+  <OpenDisplay=1>
+  <Script=ldv4300d-efm-filter.m>
+  <RunScript=0>
+  <showFrame=0>
+  <FrameText0=Title>
+  <FrameText1=Drawn By:>
+  <FrameText2=Date:>
+  <FrameText3=Revision:>
+</Properties>
+<Symbol>
+</Symbol>
+<Components>
+</Components>
+<Wires>
+</Wires>
+<Diagrams>
+  <Rect 116 796 1547 736 3 #c0c0c0 1 00 1 0 100000 2.5e+06 0 -60 5 40 1 -1 0.2 1 315 0 225 0 0 0 "Frequency" "" "">
+	<"ngspice/ac.totalamp" #00007f 0 3 0 0 0>
+	<"ngspice/ac.lpfamp" #aa0000 0 3 0 0 0>
+	<"ngspice/ac.hpfamp" #00aa00 0 3 0 0 0>
+  </Rect>
+  <Rect 118 1156 1545 307 3 #c0c0c0 1 00 1 0 100000 2.5e+06 0 -4 1 4 1 -1 0.5 1 315 0 225 0 0 0 "Frequency" "" "">
+	<"ngspice/ac.totalphase" #00007f 0 3 0 0 0>
+	<"ngspice/ac.lpfphase" #aa0000 0 3 0 0 0>
+	<"ngspice/ac.hpfphase" #00aa00 0 3 0 0 0>
+  </Rect>
+  <Rect 120 1452 1545 242 3 #c0c0c0 1 00 1 0 100000 2.5e+06 0 -70 10 70 1 -1 0.5 1 315 0 225 0 0 0 "Frequency" "" "">
+	<"ngspice/ac.totaldelay" #00007f 0 3 0 0 0>
+	<"ngspice/ac.hpfdelay" #005500 0 3 0 0 0>
+	<"ngspice/ac.lpfdelay" #aa0000 0 3 0 0 0>
+  </Rect>
+</Diagrams>
+<Paintings>
+</Paintings>
