@@ -40,7 +40,7 @@ def fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs, window='hamming'):
     # then interpolate to give amplitude/phase for each bin
     amp_interp = spi.interp1d(freq_spec, np.abs(resp_spec), kind='cubic')
     phase_interp = spi.interp1d(freq_spec, np.unwrap(np.angle(resp_spec)),
-                                kind='linear')
+                                kind='cubic')
     bin_amps = amp_interp(bin_freqs)
     bin_phases = phase_interp(bin_freqs)
 
