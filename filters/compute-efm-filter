@@ -65,6 +65,22 @@ resp_spec = np.array([0.0, 0.0, -1.0j, 0.0])
 b = fir_filter_from_spec(freq_spec, resp_spec, 32, fs)
 #filters.append(Filter('Test 2', b))
 
+def fir_filter_from_specs(freq_spec, amp_spec, phase_spec, fir_size, fs):
+    resp_spec = amp_spec * (np.cos(phase_spec) + 1.0j * np.sin(phase_spec))
+    return fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs)
+
+freqs = np.linspace(0.0e6, 2.0e6, num=11)
+amp = np.array([0.0, 0.2, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0])
+phase = np.array([0.0, -0.95, -1.05, -1.05, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2]) * -1.0
+b = fir_filter_from_specs(freqs, amp, phase, 2048, fs)
+filters.append(Filter('Adam 2021', b))
+
+freqs = np.linspace(0.0e6, 1.9e6, num=11)
+amp = np.array([0.0, 0.215, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0])
+phase = np.array([0.0, -0.92, -1.03, -1.11, -1.2, -1.2, -1.2, -1.2, -1.05, -0.95, -0.8]) * -1.25
+b = fir_filter_from_specs(freqs, amp, phase, 2048, fs)
+filters.append(Filter('Chad 2021-10-16', b))
+
 if True:
     freq_spec = None
     resp_spec = None
