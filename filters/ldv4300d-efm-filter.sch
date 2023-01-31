@@ -54,7 +54,7 @@
   <R R318 1 1390 310 15 -26 0 1 "750 Ohm" 1 "26.85" 0 "0.0" 0 "0.0" 0 "26.85" 0 "european" 0>
   <SpiceInclude SpiceInclude1 1 230 590 -36 16 0 0 "/home/ats/src/ld-decode-testsuite/filters/ngspice.models" 1 "" 0 "" 0 "" 0 "" 0>
   <NutmegEq NutmegEq1 1 890 590 -27 16 0 0 "ac" 1 "totalAmp=dB(v(out)/v(in))" 1 "lpfAmp=dB(v(fout)/v(in))" 1 "hpfAmp=dB(v(out)/v(fout))" 1 "totalPhase=phase(v(out)/v(in))" 1 "lpfPhase=phase(v(fout)/v(in))" 1 "hpfPhase=phase(v(out)/v(fout))" 1 "fs=40e6" 1 "totalDelay=group_delay(v(out)/v(in))*fs" 1 "lpfDelay=group_delay(v(fout)/v(in))*fs" 1 "hpfDelay=group_delay(v(out)/v(fout))*fs" 1>
-  <.AC AC1 1 680 580 0 40 0 0 "lin" 1 "1 Hz" 1 "5 MHz" 1 "10000" 1 "no" 0>
+  <.AC AC1 1 680 580 0 40 0 0 "lin" 1 "4 kHz" 1 "20 MHz" 1 "5000" 1 "no" 0>
 </Components>
 <Wires>
   <170 270 170 300 "" 0 0 0 "">
