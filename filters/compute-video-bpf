@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+# Visualise video BPF for ld-decode.
+
+import numpy as np
+import numpy.fft as npfft
+import scipy.signal as sps
+
+from showfilter import Filter, Ideal, show_filters
+
+fs = 40e6
+
+filters = []
+
+# Modelling the LD-V4300D's BPF gives...
+# Rising at ~20dB/octave to 1.0 MHz
+# Flat(-ish) from 1.0 to 12.0 MHz
+# Falling at ~32dB/octave from 12.0 MHz
+# In NTSC mode, adds 30dB notches at 2.3 and 2.8 MHz (for sound carriers)
+# (PAL sound carriers are 683 kHz and 1066 kHz; EFM goes up to ~1.75 MHz with most energy below 1.2 MHz)
+
+def standard(low, high, order):
+    return sps.butter(order, [low, high], btype='bandpass', fs=fs)
+
+b, a = standard(3400000, 13800000, 4)
+filters.append(Filter('NTSC master', b, a))
+
+b, a = standard(2700000, 13500000, 1)
+filters.append(Filter('PAL master', b, a))
+
+if True:
+    b, a = standard(2400000, 13500000, 2)
+    filters.append(Filter('PAL issue478', b, a))
+
+    # This isn't phase-flat enough
+    b, a = standard(2.2e6, 13.5e6, 3)
+    filters.append(Filter('PAL ats4a', b, a))
+
+    b, a = standard(2.2e6, 13.5e6, 2)
+    filters.append(Filter('PAL ats4b', b, a))
+
+show_filters(filters, fs=fs)
