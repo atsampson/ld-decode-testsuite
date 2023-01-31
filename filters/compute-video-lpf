@@ -109,7 +109,8 @@ def fir_from_fft(fir_size, freq, trans, fs, window='hamming'):
 
     want_resp = np.zeros(fft_size, dtype=np.double)
     want_resp[:len(amps)] = amps
-    want_resp[-(len(amps) - 1):] = np.flip(amps[1:])
+    want_resp[-(len(amps) - 1):] = np.conjugate(np.flip(amps[1:]))
+    # XXX Can just use npfft.irfft
 
     # The imag values in the FFT should be 0.
     impulse = npfft.ifft(want_resp).real
