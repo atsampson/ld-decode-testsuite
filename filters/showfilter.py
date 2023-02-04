@@ -31,17 +31,19 @@ def print_filter(fil):
 def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
     fig, (linax, logax, grpax) = plt.subplots(3)
 
+    POINTS = 65536
+
     for fil in filters:
         print_filter(fil)
 
-        w, h = sps.freqz(fil.b, fil.a, fs=fs)
+        w, h = sps.freqz(fil.b, fil.a, fs=fs, worN=POINTS)
         linax.plot(w, np.abs(h))
         logax.plot(w, 20 * np.log10(np.abs(h)))
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
         grpax.plot(dw, d - d[0])
 
     for ideal in ideal_dbs:
-        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=1000)
+        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=POINTS)
         vs_interp = sint.interp1d(ideal.fs, ideal.vs, kind='quadratic')(xs)
         logax.plot(ideal.fs, ideal.vs, 'o')
         if ideal.tols is not None:
@@ -49,7 +51,7 @@ def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
             logax.fill_between(xs, vs_interp - tols_interp, vs_interp + tols_interp, alpha=0.2)
 
     for ideal in ideal_delays:
-        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=1000)
+        xs = np.linspace(ideal.fs[0], ideal.fs[-1], num=POINTS)
         vs_interp = sint.interp1d(ideal.fs, ideal.vs, kind='quadratic')(xs)
         grpax.plot(ideal.fs, ideal.vs, 'o')
         if ideal.tols is not None:
