@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 # Compute and display the response of EFM filters for ld-decode.
 
+import re
+
 import numpy as np
 import numpy.fft as npfft
 import scipy.interpolate as spi
@@ -12,10 +14,10 @@ fs = 40e6
 
 filters = []
 
-def fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs, window='hamming'):
-    """Generate coefficients for a FIR filter from a given specification: a
-    sorted list of frequencies, and a list of complex responses at those
-    frequencies, with intermediate points interpolated.
+def fir_filter_from_spec(spec, fir_size, fs, window='hamming'):
+    """Generate coefficients for a FIR filter from a given specification:
+    a 2D array of [frequency, amplitude, phase] rows, sorted in frequency
+    order and with phase unwrapped. Intermediate points are interpolated.
 
     This works by using a large inverse FFT to generate an impulse response,
     which does not necessarily have a smooth response between the points in
@@ -24,6 +26,12 @@ def fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs, window='hamming'):
 
     See: Steven W. Smith, "The Scientist and Engineer's Guide to DSP", 2nd
     edition, chapter 17, p299. <https://dspguide.com/>"""
+
+    # Get views of the columns in the spec
+    spec_t = spec.transpose()
+    freq_spec = spec_t[0]
+    amp_spec = spec_t[1]
+    phase_spec = spec_t[2]
 
     # Determine size of the FFT, making sure it's much bigger than the output
     real_size = 1024
@@ -38,9 +46,8 @@ def fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs, window='hamming'):
 
     # Convert complex response spec to amplitude and unwrapped phase,
     # then interpolate to give amplitude/phase for each bin
-    amp_interp = spi.interp1d(freq_spec, np.abs(resp_spec), kind='cubic')
-    phase_interp = spi.interp1d(freq_spec, np.unwrap(np.angle(resp_spec)),
-                                kind='cubic')
+    amp_interp = spi.interp1d(freq_spec, amp_spec, kind='cubic')
+    phase_interp = spi.interp1d(freq_spec, phase_spec, kind='cubic')
     bin_amps = amp_interp(bin_freqs)
     bin_phases = phase_interp(bin_freqs)
 
@@ -52,112 +59,135 @@ def fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs, window='hamming'):
     impulse = npfft.irfft(complex_data)
 
     # Rotate and window the result to get the FIR filter
-    impulse = np.roll(impulse, fir_size // 2)
+    impulse[:] = np.roll(impulse, fir_size // 2)
     return impulse[:fir_size] * sps.get_window(window, fir_size)
 
-freq_spec = np.array([0.0, 5.0e6, 10.0e6, 15.0e6])
-resp_spec = np.array([0.0, 0.0, 1.0, 0.0])
-b = fir_filter_from_spec(freq_spec, resp_spec, 32, fs)
+spec = np.array([
+    [0.0,     0.0,   0.0],
+    [5.0e6,   0.0,   0.0],
+    [10.0e6,  1.0,   0.0],
+    [15.0e6,  0.0,   0.0],
+    ])
+b = fir_filter_from_spec(spec, 33, fs)
 #filters.append(Filter('Test 1', b))
 
-freq_spec = np.array([0.0, 5.0e6, 10.0e6, 15.0e6])
-resp_spec = np.array([0.0, 0.0, -1.0j, 0.0])
-b = fir_filter_from_spec(freq_spec, resp_spec, 32, fs)
+spec = np.array([
+    [0.0,     0.0,   0.0],
+    [5.0e6,   0.0,   0.0],
+    [10.0e6,  1.0,   np.pi],
+    [15.0e6,  0.0,   0.0],
+    ])
+b = fir_filter_from_spec(spec, 33, fs)
 #filters.append(Filter('Test 2', b))
 
-def fir_filter_from_specs(freq_spec, amp_spec, phase_spec, fir_size, fs):
-    resp_spec = amp_spec * (np.cos(phase_spec) + 1.0j * np.sin(phase_spec))
-    return fir_filter_from_spec(freq_spec, resp_spec, fir_size, fs)
-
-freqs = np.linspace(0.0e6, 2.0e6, num=11)
-amp = np.array([0.0, 0.2, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0])
-phase = np.array([0.0, -0.95, -1.05, -1.05, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2]) * -1.0
-b = fir_filter_from_specs(freqs, amp, phase, 2048, fs)
+spec = np.array([
+    np.linspace(0.0e6, 2.0e6, num=11),
+    np.array([0.0, 0.2, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0]),
+    np.array([0.0, -0.95, -1.05, -1.05, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2]) * -1.0,
+    ]).transpose()
+b = fir_filter_from_spec(spec, 2048, fs)
 filters.append(Filter('Adam 2021', b))
 
-freqs = np.linspace(0.0e6, 1.9e6, num=11)
-amp = np.array([0.0, 0.215, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0])
-phase = np.array([0.0, -0.92, -1.03, -1.11, -1.2, -1.2, -1.2, -1.2, -1.05, -0.95, -0.8]) * -1.25
-b = fir_filter_from_specs(freqs, amp, phase, 2048, fs)
+spec = np.array([
+    np.linspace(0.0e6, 1.9e6, num=11),
+    np.array([0.0, 0.215, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0]),
+    np.array([0.0, -0.92, -1.03, -1.11, -1.2, -1.2, -1.2, -1.2, -1.05, -0.95, -0.8]) * -1.25
+    ]).transpose()
+b = fir_filter_from_spec(spec, 2048, fs)
 filters.append(Filter('Chad 2021-10-16', b))
 
-if True:
-    freq_spec = None
-    resp_spec = None
-    with open('ldv4300d-efm-filter.dat.ngspice') as f:
-        import re
+def read_ngspice_spec(in_fn):
+    """Read the output of an ngspice simulation as a filter spec.
+    This assumes that your circuit's output is called 'out',
+    and the input is always 1.0+0.0j."""
 
+    spec = None
+    num_rows = None
+
+    with open(in_fn) as f:
         while True:
-            l = f.readline()
-            if l == "":
+            line = f.readline()
+            if line == "":
                 break
-            l = l.strip()
+            line = line.strip()
 
-            m = re.match(r'^<indep frequency (\d+)>$', l)
+            # Read frequencies
+            m = re.match(r'^<indep frequency (\d+)>$', line)
             if m is not None:
-                # Insert a 0 at the start, since the simulation doesn't
-                freq_spec = np.zeros(int(m.group(1)) + 1, dtype=np.double)
-                for i in range(len(freq_spec) - 1):
-                    l = f.readline().strip()
-                    freq_spec[i + 1] = float(l)
+                # Add an extra row for 0 Hz
+                num_rows = int(m.group(1)) + 1
+                spec = np.zeros((num_rows, 3), dtype=np.double)
 
-            m = re.match(r'<dep ac.v\(out\) frequency>$', l)
-            if m is not None:
-                resp_spec = np.zeros(len(freq_spec), dtype=np.cdouble)
-                for i in range(len(resp_spec) - 1):
-                    l = f.readline().strip()
-                    m = re.match(r'^(.*)([+-])j(.*)$', l)
-                    resp_spec[i + 1] = complex(float(m.group(1)), float(m.group(2) + m.group(3)))
+                # Assume the 0 Hz point has 0 amplitude
+                # (This obviously won't be true for all filters!)
+                spec[0][0:3] = 0.0
 
-                # Duplicate the first data point to frequency 0
-                resp_spec[0] = resp_spec[1]
+                for i in range(num_rows - 1):
+                    line = f.readline().strip()
+                    spec[i + 1][0] = float(line)
 
-                # Normalise
-                resp_spec /= np.max(np.abs(resp_spec))
+            # Read output
+            if line == '<dep ac.v(out) frequency>':
+                for i in range(num_rows - 1):
+                    line = f.readline().strip()
+                    m = re.match(r'^(.*)([+-])j(.*)$', line)
 
-    with open('efm_filter.py', 'w') as f:
+                    # Convert to amplitude/phase form
+                    value = complex(float(m.group(1)),
+                                    float(m.group(2) + m.group(3)))
+                    spec[i + 1][1] = np.abs(value)
+                    spec[i + 1][2] = np.angle(value)
+
+    spec_t = spec.transpose()
+
+    # Normalise the amplitudes
+    spec_t[1] /= np.max(spec_t[1])
+
+    # Unwrap the phases (for ease of interpolation later)
+    spec_t[2] = np.unwrap(spec_t[2])
+
+    return spec
+
+def ngspice_to_python(specs, out_fn):
+    """Write filter specs to a Python file.
+    specs is [("name1", spec1), ("name2", spec2) ...]."""
+
+    with open(out_fn, 'w') as f:
         f.write('# Generated by compute-efm-filter\n\n')
         f.write('import numpy as np\n\n')
 
-        freq_out = []
-        resp_out = []
-
-        freq_step = 4e3
-        next_freq = 0
-        for i in range(len(freq_spec)):
-            if freq_spec[i] >= next_freq:
-                freq_out.append(freq_spec[i])
-                resp_out.append(resp_spec[i])
-                next_freq = freq_spec[i] + freq_step
-            # The response is less interesting above 3Mhz...
-            if freq_spec[i] >= 3e6:
-                freq_step = 1e6
-
-        def write_array(name, dtype, values):
+        for name, spec in specs:
             f.write('%s = np.array([\n' % name)
-            pos = 0
-            while pos < len(values):
-                line = '   '
-                while pos < len(values):
-                    part = ' %s,' % values[pos]
-                    if len(line) + len(part) > 78:
-                        break
-                    line += part
-                    pos += 1
-                line += '\n'
-                f.write(line)
-            f.write('    ], %s)\n' % dtype)
+            for row in spec:
+                f.write('    [%s],\n' % (', '.join(str(v) for v in row)))
+            f.write('    ], np.double)\n\n')
 
-        write_array('efmfilter_freq', 'np.double', freq_out)
-        write_array('efmfilter_resp', 'np.cdouble', resp_out)
+orig_ddd_spec = read_ngspice_spec('ddd-rf-filter.dat.ngspice')
+orig_efm_spec = read_ngspice_spec('ldv4300d-efm-filter.dat.ngspice')
 
-    b = fir_filter_from_spec(freq_spec, resp_spec, 2048, fs)
-    filters.append(Filter('Sim', b))
+# XXX Trim spec to remove values that could be interpolated accurately
 
-if True:
-    from efm_filter import efmfilter_freq, efmfilter_resp
-    b = fir_filter_from_spec(efmfilter_freq, efmfilter_resp, 2048, fs)
-    filters.append(Filter('Saved', b))
+ngspice_to_python([
+    ('ddd_spec', orig_ddd_spec),
+    ('efm_spec', orig_efm_spec),
+    ], 'efm_filter.py')
+
+SIM_SIZE = 2048
+
+b = fir_filter_from_spec(orig_ddd_spec, SIM_SIZE, fs)
+filters.append(Filter('DDD frontend sim', b))
+
+b = fir_filter_from_spec(orig_efm_spec, SIM_SIZE, fs)
+filters.append(Filter('LD-V4300D EFM sim', b))
+
+if False:
+    from efm_filter import ddd_spec, efm_spec
+
+    b = fir_filter_from_spec(ddd_spec, SIM_SIZE, fs)
+    filters.append(Filter('DDD frontend saved', b))
+
+    b = fir_filter_from_spec(efm_spec, SIM_SIZE, fs)
+    filters.append(Filter('LD-V4300D EFM saved', b))
 
 # The LD-V4300D has two filters, an elliptic(-ish) LPF then an HPF.
 b, a = sps.ellip(N=3, rp=0.5, rs=37.0, Wn=1.8e6, fs=fs)
