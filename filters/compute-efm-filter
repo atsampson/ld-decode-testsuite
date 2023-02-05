@@ -189,6 +189,28 @@ if False:
     b = fir_filter_from_spec(efm_spec, SIM_SIZE, fs)
     filters.append(Filter('LD-V4300D EFM saved', b))
 
+# The DDD frontend has an HPF (C401 and C402) then the LPF.
+# The -3dB point is about 8 kHz.
+# 100 nF * 0.5 kOhm; fc = 1/(100e-9 * 0.5e3 * 2 * pi) = 3183 - no
+# With 200 ohm (the R in the op-amp's ground) it's 7957 which is spot on...
+# So - zero at 0 Hz, pole at 8 kHz
+
+def pole_zero_iir(pole_f, zero_f, fs):
+    # Pre-warp for bilinear transform
+    w1 = 2 * fs * np.tan(zero_f / (2 * fs))
+    w2 = 2 * fs * np.tan(pole_f / (2 * fs))
+
+    tf_b, tf_a = sps.zpk2tf([-w1], [-w2], 1.0)  # was w2/w1
+    return sps.bilinear(tf_b, tf_a, fs)
+
+# RC filter: R = 200R, C = 100nF (pole about 8 kHz in simulation)
+b, a = pole_zero_iir(1 / (100e-9 * 200 * 2 * np.pi), 0, fs)
+#filters.append(Filter('DDD HPF approx', b, a))
+# We would want a filter that just inverted the phase of this.
+
+# Further thought: there's no relevant information under 750 kHz or so anyway.
+# So try a sharper HPF?
+
 # The LD-V4300D has two filters, an elliptic(-ish) LPF then an HPF.
 b, a = sps.ellip(N=3, rp=0.5, rs=37.0, Wn=1.8e6, fs=fs)
 #filters.append(Filter('LD-V4300D EFM LPF', b, a))
