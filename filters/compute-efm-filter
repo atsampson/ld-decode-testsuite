@@ -34,7 +34,7 @@ spec = np.array([
     np.array([0.0, 0.2, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0]),
     np.array([0.0, -0.95, -1.05, -1.05, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2, -1.2]) * -1.0,
     ]).transpose()
-b = fir_filter_from_spec(spec, 2048, fs)
+b = fir_filter_from_spec(spec, 2049, fs)
 filters.append(Filter('Adam 2021', b))
 
 spec = np.array([
@@ -42,7 +42,7 @@ spec = np.array([
     np.array([0.0, 0.215, 0.41, 0.73, 0.98, 1.03, 0.99, 0.81, 0.59, 0.42, 0.0]),
     np.array([0.0, -0.92, -1.03, -1.11, -1.2, -1.2, -1.2, -1.2, -1.05, -0.95, -0.8]) * -1.25
     ]).transpose()
-b = fir_filter_from_spec(spec, 2048, fs)
+b = fir_filter_from_spec(spec, 2049, fs)
 filters.append(Filter('Chad 2021-10-16', b))
 
 orig_ddd_spec = read_ngspice_spec('ddd-rf-filter.dat.ngspice')
@@ -53,7 +53,7 @@ specs_to_python([
     ('efm_spec', orig_efm_spec),
     ], 'efm_filter.py')
 
-SIM_SIZE = 2048
+SIM_SIZE = 2049
 
 b = fir_filter_from_spec(orig_ddd_spec, SIM_SIZE, fs)
 filters.append(Filter('DDD frontend sim', b))
