@@ -32,7 +32,7 @@ def show_filters(filters, fs, maxfreq=None, ideal_dbs=[], ideal_delays=[]):
     if maxfreq is None:
         maxfreq = fs / 2
 
-    fig, (linax, logax, grpax) = plt.subplots(3)
+    fig, (linax, logax, phaseax, grpax) = plt.subplots(4)
 
     POINTS = 65536
 
@@ -43,6 +43,8 @@ def show_filters(filters, fs, maxfreq=None, ideal_dbs=[], ideal_delays=[]):
         w, h = sps.freqz(fil.b, fil.a, fs=fs, worN=w)
         linax.plot(w, np.abs(h))
         logax.plot(w, 20 * np.log10(np.abs(h)))
+        phaseax.plot(w, np.angle(h))
+
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
         grpax.plot(dw, d - d[0])
 
@@ -62,7 +64,7 @@ def show_filters(filters, fs, maxfreq=None, ideal_dbs=[], ideal_delays=[]):
             tols_interp = sint.interp1d(ideal.fs, ideal.tols, kind='quadratic')(xs)
             grpax.fill_between(xs, vs_interp - tols_interp, vs_interp + tols_interp, alpha=0.2)
 
-    for ax in (linax, logax, grpax):
+    for ax in (linax, logax, phaseax, grpax):
         if ax is logax:
             extras = [ideal.name for ideal in ideal_dbs]
         elif ax is grpax:
@@ -75,6 +77,7 @@ def show_filters(filters, fs, maxfreq=None, ideal_dbs=[], ideal_delays=[]):
         ax.grid(True)
     linax.set_ylabel('Magnitude response (linear)')
     logax.set_ylabel('Magnitude response (dB)')
+    phaseax.set_ylabel('Phase')
     grpax.set_ylabel('Relative group delay (samples)')
 
     plt.show()
