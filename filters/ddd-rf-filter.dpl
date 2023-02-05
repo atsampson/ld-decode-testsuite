@@ -1,6 +1,6 @@
 <Qucs Schematic 1.0.0>
 <Properties>
-  <View=0,80,1671,1601,1,0,240>
+  <View=-36,20,1672,1601,1,0,0>
   <Grid=10,10,0>
   <DataSet=ddd-rf-filter.dat>
   <DataDisplay=ddd-rf-filter.sch>
@@ -20,7 +20,7 @@
 <Wires>
 </Wires>
 <Diagrams>
-  <Rect 100 793 1524 693 3 #c0c0c0 1 00 1 0 100000 2.5e+06 0 -60 10 30 1 -1 0.2 1 315 0 225 0 0 0 "Frequency" "" "">
+  <Rect 100 793 1524 693 3 #c0c0c0 1 00 1 0 5000 100000 0 -60 2 30 1 -1 0.2 1 315 0 225 0 0 0 "Frequency" "" "">
 	<"ngspice/ac.totalamp" #0000ff 0 3 0 0 0>
 	<"ngspice/ac.lpfamp" #aa0000 0 3 0 0 0>
 	<"ngspice/ac.hpfamp" #00aa00 0 3 0 0 0>

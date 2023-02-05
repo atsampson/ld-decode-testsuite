@@ -1,6 +1,6 @@
 <Qucs Schematic 1.0.0>
 <Properties>
-  <View=0,0,1781,1172,1,0,0>
+  <View=40,10,1761,1174,0.980825,0,0>
   <Grid=10,10,1>
   <DataSet=ddd-rf-filter.dat>
   <DataDisplay=ddd-rf-filter.dpl>
@@ -45,7 +45,7 @@
   <R Rload 1 1630 490 15 -26 0 1 "50 Ohm" 1 "26.85" 0 "0.0" 0 "0.0" 0 "26.85" 0 "european" 0>
   <GND * 1 1630 580 0 0 0 0>
   <NutmegEq NutmegEq1 1 810 900 -27 16 0 0 "ac" 1 "totalAmp=dB(v(out)/v(in))" 1 "hpfAmp=dB(v(fin)/v(in))" 1 "lpfAmp=dB(v(out)/v(fin))" 1 "totalPhase=phase(v(out)/v(in))" 1 "hpfPhase=phase(v(fin)/v(in))" 1 "lpfPhase=phase(v(out)/v(fin))" 1 "fs=40e6" 1 "totalDelay=group_delay(v(out)/v(in))*fs" 1 "hpfDelay=group_delay(v(fin)/v(in))*fs" 1 "lpfDelay=group_delay(v(out)/v(fin))*fs" 1>
-  <.AC AC1 1 510 870 0 40 0 0 "lin" 1 "1 Hz" 1 "25 MHz" 1 "10000" 1 "no" 0>
+  <.AC AC1 1 510 870 0 40 0 0 "lin" 1 "1 Hz" 1 "20000001 Hz" 1 "5001" 1 "no" 0>
 </Components>
 <Wires>
   <120 440 120 480 "" 0 0 0 "">
