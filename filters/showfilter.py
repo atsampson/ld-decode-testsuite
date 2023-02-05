@@ -28,7 +28,10 @@ def print_filter(fil):
         consts(fil.a)
         print('};')
 
-def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
+def show_filters(filters, fs, maxfreq=None, ideal_dbs=[], ideal_delays=[]):
+    if maxfreq is None:
+        maxfreq = fs / 2
+
     fig, (linax, logax, grpax) = plt.subplots(3)
 
     POINTS = 65536
@@ -36,7 +39,8 @@ def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
     for fil in filters:
         print_filter(fil)
 
-        w, h = sps.freqz(fil.b, fil.a, fs=fs, worN=POINTS)
+        w = np.linspace(0, maxfreq, POINTS)
+        w, h = sps.freqz(fil.b, fil.a, fs=fs, worN=w)
         linax.plot(w, np.abs(h))
         logax.plot(w, 20 * np.log10(np.abs(h)))
         dw, d = sps.group_delay((fil.b, fil.a), w, fs=fs)
@@ -67,7 +71,7 @@ def show_filters(filters, fs, ideal_dbs=[], ideal_delays=[]):
             extras = []
         ax.legend(['%s <%d>' % (fil.name, len(fil.b)) for fil in filters] + extras)
         ax.set_xlabel('Frequency')
-        ax.set_xlim(0, fs / 2)
+        ax.set_xlim(0, maxfreq)
         ax.grid(True)
     linax.set_ylabel('Magnitude response (linear)')
     logax.set_ylabel('Magnitude response (dB)')
