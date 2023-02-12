@@ -7,6 +7,9 @@
 # FIXME: Clean up intermediate files (.map) once complete
 # FIXME: Extract Teletext subtitles
 
+# Catch runaway programs (especially ld-process-efm) using too much memory.
+ulimit -d $((8192 * 1024))
+
 usage () {
 	cat >&2 <<EOF
 Usage: $0 [options] INPUT [OUTPUT]
