@@ -56,7 +56,9 @@ def raw_filter_from_spec(spec, fir_size, fft_real_size, fs):
 
     # Rotate and window the result to get the FIR filter
     impulse[:] = np.roll(impulse, fir_size // 2)
-    return impulse[:fir_size] * sps.get_window('hamming', fir_size)
+    impulse[:fir_size] *= sps.get_window('hamming', fir_size)
+    impulse[fir_size:] = 0.0
+    return impulse
 
 def fir_filter_from_spec(spec, fir_size, fs):
     """As raw_filter_from_spec, returning FIR filter coefficients."""
@@ -79,7 +81,7 @@ def fft_filter_from_spec(spec, fir_size, fft_real_size, fs):
     # Rotate the FIR filter back, so it doesn't add a delay
     impulse[:] = np.roll(impulse, (-len(impulse)) // 2)
 
-    return npfft.fft(impulse)
+    return npfft.rfft(impulse)
 
 def read_ngspice_spec(in_fn):
     """Read the output of an ngspice simulation as a filter spec.

@@ -1,6 +1,10 @@
 #!/usr/bin/python3
 # Utilities for EFM filtering.
 
+import sys
+sys.path.append("../filters")
+from filterspec import fft_filter_from_spec, read_ngspice_spec
+
 import numpy as np
 import pyfftw
 import scipy.interpolate as spi
@@ -11,7 +15,7 @@ SAMPLE_RATE = 40e6
 class FFTFilter:
     """A generic FFT-based filter."""
 
-    def __init__(self, real_size=1 << 11, sample_rate=SAMPLE_RATE):
+    def __init__(self, real_size=1 << 16, sample_rate=SAMPLE_RATE):
         """Initialise the filter, using blocks of real_size samples."""
 
         # We will apply the FFT to real_size samples at a time, in blocks that
@@ -181,7 +185,7 @@ class EFMEqualiser:
         """Compute filter coefficients for the given FFTFilter."""
 
         # Anything above the highest frequency is left as zero.
-        self.coeffs = np.zeros(fft.complex_size, dtype=np.complex)
+        self.coeffs = np.zeros(fft.complex_size, dtype=complex)
 
         # Generate the frequency-domain coefficients by cubic interpolation between the equaliser values.
         a_interp = spi.interp1d(self.freqs, self.amp, kind="cubic")
@@ -192,7 +196,17 @@ class EFMEqualiser:
         bin_phase = p_interp(bin_freqs)
 
         # Scale by the amplitude, rotate by the phase
+        # XXX The phase is backwards here
         self.coeffs[:nonzero_bins] = bin_amp * (np.cos(bin_phase) + (complex(0, -1) * np.sin(bin_phase)))
+
+        # Convert to impulse, window, and back to frequency domain
+        impulse_len = 1024
+        impulse = np.fft.irfft(self.coeffs)
+        impulse = np.roll(impulse, impulse_len // 2)
+        impulse[:impulse_len] *= sps.get_window('hamming', impulse_len)
+        impulse[impulse_len:] = 0.0
+        impulse = np.roll(impulse, -(impulse_len // 2))
+        self.coeffs = np.fft.rfft(impulse)
 
     def filter(self, comp):
         """Frequency-domain filter function to use with FFTFilter."""
@@ -212,6 +226,35 @@ class VideoEqualiser(EFMEqualiser):
         self.phase = np.array([0.0, 0.25, 0.5, 0.75])
 
         self.coeffs = None
+
+class EFMSimFilter:
+    """EFM filter based on ngspice models of real hardware."""
+
+    def __init__(self):
+        # Dummy controls
+        self.freqs = np.linspace(0.0e6, 2.0e6, num=4)
+        self.amp = np.array([1.0] * len(self.freqs))
+        self.phase = np.array([0.0] * len(self.freqs))
+
+        self.spec = read_ngspice_spec('../filters/ldv4300d-efm-filter.dat.ngspice')
+        self.ddd_spec = read_ngspice_spec('../filters/ddd-rf-filter.dat.ngspice')
+        #ddd_trans = self.ddd_spec.transpose()
+        #self.ddd_phase = spi.interp1d(ddd_trans[0], ddd_trans[2], kind='cubic')
+
+        self.coeffs = None
+
+    def compute(self, fft):
+        FIRSIZE = 32769
+        self.coeffs = fft_filter_from_spec(self.spec, FIRSIZE, fft.real_size, fft.sample_rate)
+
+        # I think this is working for the wrong reason...
+        ddd_coeffs = fft_filter_from_spec(self.ddd_spec, FIRSIZE, fft.real_size, fft.sample_rate)
+        if self.amp[1] > 0.5:
+            # Invert the imag part, to reverse the phase effect
+            self.coeffs *= np.conjugate(ddd_coeffs)
+
+    def filter(self, comp):
+        comp *= self.coeffs
 
 if __name__ == "__main__":
     # Test FFTFilter with various sizes of data to ensure blocking works properly

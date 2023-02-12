@@ -16,7 +16,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
 from efmdecode import EFM_RATE, zero_crossings
-from efmfilter import SAMPLE_RATE, FFTFilter, EFMEqualiser
+from efmfilter import SAMPLE_RATE, FFTFilter, EFMEqualiser, EFMSimFilter
 
 class InputFile:
     """A .s16 RF sample that can be decoded."""
@@ -26,17 +26,18 @@ class InputFile:
         # mmap the file to avoid loading it all into memory
         self.data = np.memmap(filename=filename, dtype=np.int16, mode="r")
 
-        self.offset = 2000
+        self.offset = 200000
 
 class GUI:
     """The GUI and its state."""
 
     def __init__(self, args):
         self.chart_length = 1000
-        self.zc_length = 100000
+        self.data_length = 100000
 
         self.fft = FFTFilter()
         self.eq = EFMEqualiser()
+        #self.eq = EFMSimFilter()
 
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count())
         self.futures = []
@@ -155,17 +156,23 @@ class GUI:
         """Update the GUI for a change in input file."""
 
         # XXX Limit how far the user can scroll -- else it's a bit unwieldy!
-        input_len = min(len(self.current_file.data), 10 * self.chart_length)
+        input_len = min(len(self.current_file.data), 5 * self.data_length)
         self.offset_scale.set_range(0, input_len - self.chart_length)
         self.offset_scale.set_value(self.current_file.offset)
 
     def update_filter(self):
         """Update the GUI for a change in filter parameters."""
 
-        start = self.current_file.offset
-        end = start + self.chart_length
+        # Get data_length samples, centred on offset
+        start = max(0, self.current_file.offset - (self.data_length // 2))
+        end = min(len(self.current_file.data), start + self.data_length)
         self.input_data = self.current_file.data[start:end]
-        self.input_range = range(start, end)
+        self.output_data = None
+
+        # Work out which samples to plot on the after chart
+        self.input_data_offset = self.current_file.offset - start
+        self.input_range = range(self.current_file.offset,
+                                 self.current_file.offset + self.chart_length)
 
         # Compute the filter
         self.eq.amp[:] = [w.get_value() for w in self.amp_scales]
@@ -183,7 +190,6 @@ class GUI:
         # Start calculations in the background
         self.futures.append(self.executor.submit(self.update_before))
         self.futures.append(self.executor.submit(self.update_after))
-        self.futures.append(self.executor.submit(self.update_zc))
 
     def update_before(self):
         # Filter and plot the "before" chart
@@ -191,35 +197,37 @@ class GUI:
         GLib.idle_add(self.plot_chart, self.before_ax, before_data, "Low-pass filtered signal")
 
     def update_after(self):
-        # Filter and plot the "after" chart
-        after_data = self.fft.apply(self.input_data, self.eq.filter)
-        GLib.idle_add(self.plot_chart, self.after_ax, after_data, "Equalised signal")
+        # Filter the input data
+        try:
+            output_data = self.fft.apply(self.input_data, self.eq.filter)
+        except Exception as e:
+            print('Exception in fft.apply:', e)
+            return
+
+        # Plot the "after" chart
+        GLib.idle_add(self.plot_chart, self.after_ax, output_data, "Equalised signal")
+
+        # Find the spacings between crossings
+        zero_offset = self.zero_scale.get_value()
+        crossings = zero_crossings(output_data + zero_offset)
+        spacings = crossings[1:] - crossings[:-1]
+
+        # Plot the "zero crossings" chart
+        GLib.idle_add(self.plot_zcs, spacings)
 
     def plot_chart(self, ax, y_data, title):
         """Idle callback to update the before or after chart."""
 
         # XXX This is still a bit clunky, as the plotting itself is expensive...
         ax.clear()
-        ax.plot(self.input_range, y_data)
+        input_data_len = self.input_range.stop - self.input_range.start
+        ax.plot(self.input_range, y_data[self.input_data_offset:self.input_data_offset + input_data_len])
 
         # Tweak appearance
         ax.grid(True)
         ax.set_title(title)
 
         self.canvas.draw()
-
-    def update_zc(self):
-        # Filter the input data from the selected position
-        start = self.current_file.offset
-        end = min(start + self.zc_length, len(self.current_file.data))
-        zc_data = self.fft.apply(self.current_file.data[start:end], self.eq.filter)
-
-        # Find the spacings between crossings
-        zero_offset = self.zero_scale.get_value()
-        crossings = zero_crossings(zc_data + zero_offset)
-        spacings = crossings[1:] - crossings[:-1]
-
-        GLib.idle_add(self.plot_zcs, spacings)
 
     def plot_zcs(self, spacings):
         """Idle callback to update the zero crossings chart."""
