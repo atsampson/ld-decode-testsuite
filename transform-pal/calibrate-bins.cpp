@@ -1,6 +1,9 @@
 // Determine an optimal value for each bin's threshold, by analysing statistics
 // produced by ld-chroma-decoder when decoding just the luma and just the
 // chroma from a video.
+// XXX This doesn't really work, unfortunately -- it produces thresholds that
+// tend to be at one end or the other of the scale. The algorithm works but the
+// "fitness function" isn't right...
 
 #include <algorithm>
 #include <array>
@@ -8,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <limits>
 #include <numeric>
 #include <vector>
 
@@ -129,7 +133,7 @@ void runTrials(int iteration, std::ifstream &compFile, std::ifstream &lumaFile, 
         printf("Bin %d:\n", bin);
         printf("%8s %8s %15s %15s %5s\n", "Thr", "dB", "Correct", "Incorrect", "Corr%");
 
-        double bestPercent = -1.0;
+        double bestIncorrect = std::numeric_limits<double>::max();
         for (const Trial &trial: trials[bin]) {
             double percent = (100 * trial.correct) / (trial.correct + trial.incorrect);
 
@@ -150,9 +154,9 @@ void runTrials(int iteration, std::ifstream &compFile, std::ifstream &lumaFile, 
 
             // Is this better than one we've seen already?
             // (Preferring lower threshold values where otherwise equal.)
-            if (percent > bestPercent) {
+            if (trial.incorrect < bestIncorrect) {
                 bestThresholds[bin] = trial.threshold;
-                bestPercent = percent;
+                bestIncorrect = trial.incorrect;
             }
         }
         printf("\n");

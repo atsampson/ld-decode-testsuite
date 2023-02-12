@@ -44,8 +44,9 @@ echo "Decoding $tbc + $refvideo to $outvideo"
 
 deccmd=(ld-chroma-decoder)
 deccmd+=(-f transform3d)
-#deccmd+=(--transform-threshold 0.4)
-deccmd+=(--transform-thresholds thresholds3d-all625)
+deccmd+=(--transform-threshold 0.4)
+#deccmd+=(--transform-thresholds thresholds3d-all625)
+#deccmd+=(--transform-thresholds thresholds3d-newpat)
 deccmd+=(--chroma-nr 0 --luma-nr 0)
 deccmd+=(--simple-pal)
 deccmd+=(--output-format y4m)

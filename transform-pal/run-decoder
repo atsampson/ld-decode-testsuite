@@ -2,6 +2,13 @@
 # Run patched ld-chroma-decoder with a bunch of samples, collecting the stats file.
 
 : \
+		$videodir/lavfi*-625.rgb \
+		$videodir/lavfi-pal75bars.rgb \
+		$videodir/ldv-*.rgb \
+		$videodir/vqeg-*-625.rgb \
+		$videodir/svt-*.rgb \
+
+		$videodir/bbc-*.rgb \
 :
 
 dim=3d
@@ -11,11 +18,7 @@ for mode in composite luma chroma; do
 	rm -f binstats
 
 	for rgb in \
-		$videodir/lavfi*-625.rgb \
-		$videodir/lavfi-pal75bars.rgb \
-		$videodir/ldv-*.rgb \
-		$videodir/vqeg-*-625.rgb \
-		$videodir/svt-*.rgb \
+		$videodir/bbc-newpat.rgb \
 		; do
 
 		base="${rgb%.rgb}"
@@ -30,5 +33,5 @@ for mode in composite luma chroma; do
 
 	done
 
-	mv binstats binstats${dim}-all625-$mode
+	mv binstats binstats${dim}-newpat-$mode
 done
