@@ -273,6 +273,11 @@ if $cc1 && grep >/dev/null '^[0-9]' "$out.cc1.scc"; then
 	if [ ! -f "$out.cc1.srt" ]; then
 		action tt convert -i "$out.cc1.scc" -o "$out.cc1.srt"
 	fi
+
+	# We might have some CC data, but none that can be converted
+	if ! grep >/dev/null '^[0-9]' "$out.cc1.srt"; then
+		cc1=false
+	fi
 else
 	cc1=false
 fi
