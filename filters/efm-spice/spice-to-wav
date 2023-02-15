@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+# Convert ngspice output to WAV.
+# (Like spice-audio-tools' spicetowav.py, but much faster!)
+# XXX Uses a fixed sample rate and scaling factor
+
+import sys
+import wave
+
+import numpy as np
+import scipy.interpolate as spi
+
+FS = 40e6
+
+assert len(sys.argv) == 3
+input_fn = sys.argv[1]
+output_fn = sys.argv[2]
+
+# Read the input file: first column is times, second column is values
+input_data = np.loadtxt(input_fn, usecols=(0, 1), ndmin=2)
+input_times = input_data.transpose()[0]
+input_values = input_data.transpose()[1]
+
+max_time = input_times[-1]
+output_times = np.linspace(0, max_time, int(max_time * FS) + 1)
+
+output_values = spi.interp1d(input_times, input_values, kind='linear')(output_times)
+output_values *= 10000
+output_values -= 32767
+
+with wave.open(output_fn, 'w') as f:
+    f.setnchannels(1)
+    f.setsampwidth(2)
+    f.setframerate(FS)
+    f.setcomptype('NONE', 'not compressed')
+
+    f.writeframes(output_values.astype(np.int16).tobytes())

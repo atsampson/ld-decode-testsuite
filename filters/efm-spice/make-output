@@ -1,0 +1,9 @@
+#!/bin/bash -ex
+
+fs=40000000
+lddecode=$HOME/src/ld-decode-2
+
+./spice-to-wav efmsim.output efmsim.output.wav
+sox efmsim.output.wav -t raw -b 16 -c 1 -e signed -r $fs - \
+	| $lddecode/tools/ld-process-efm/demodulate/ld-efm-demodulate efmsim.output.efm
+$lddecode/tools/ld-process-efm/ld-process-efm efmsim.output.efm efmsim.output.pcm

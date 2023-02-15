@@ -1,0 +1,48 @@
+.title LD-V4330D EFM filter
+
+.control
+save v(out)
+* 40 MHz sample rate, 0.1 sec
+tran 2.5e-08 0.1
+wrdata efmsim.output v(out)
+.endc
+
+.INCLUDE "../ngspice.models"
+
+a1 %v([in]) filesrc
+
+* Originally: V1 in 0 DC 0 SIN(0 1 1G 0 0 0) AC 1
+V2 _net0 0 DC 5
+V3 0 _net1 DC 5
+R313 fin _net0  1K
+R312 _net1 _net2  1.8K
+R311 _net3 _net2  470
+C310 in _net3  1U 
+R451 0 in  330
+L304 fin _net4  150U 
+L305 _net4 _net5  180U 
+L306 _net5 fout  150U 
+C316 fout _net6  4.7U 
+R315 _net6 _net0  1.5K
+R314 0 _net6  3.6K
+C312 _net4 _net5  27P 
+C311 0 fin  68P 
+C313 0 _net4  100P 
+C314 0 _net5  100P 
+C315 0 fout  68P 
+R316 _net7 _net0  2.2K
+R317 _net8 _net9  47
+R319 0 _net10  10K
+R320 _net9 out  2.2K
+C317 _net10 _net8  6800P 
+Q304 fin  0  _net2 2SC1740S
+Q305 _net7  _net6  _net9 2SC1740S
+C318 0 _net10  4.7U 
+R321 _net1 out  2.2K
+Q306 out  _net7  _net0 QSA1316
+R318 _net10 _net8  750
+
+.model filesrc filesource (file="efmsim.input"
++ amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)

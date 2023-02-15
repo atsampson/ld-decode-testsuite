@@ -1,0 +1,12 @@
+#!/bin/bash -ex
+
+fs=40000000
+bytes=2
+file="/n/stuff2/capture/laserdisc/Hawaii_CLV_NTSC_side1_4400d_ML101860_2022-09-27_17-23-23.ldf"
+
+# Extract 0.1 sec of signal - takes about 2 minutes to simulate
+ld-ldf-reader "$file" $(($fs * $bytes * 5 * 60)) \
+	| head -c$(($fs * $bytes / 10)) \
+	| sox -t raw -b 16 -c 1 -e signed -r $fs - efmsim.input.wav
+
+$HOME/src/spice-audio-tools/wavtospice.py efmsim.input.wav efmsim.input
