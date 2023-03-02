@@ -30,7 +30,8 @@ Options:
   -f DECODER       Select chroma decoder (ld-chroma-decoder -f DECODER)
   -G GAIN          Set chroma gain (ld-chroma-decoder --chroma-gain GAIN)
   -P PHASE         Set chroma phase (ld-chroma-decoder --chroma-phase PHASE)
-  -d               Deinterlace before encoding
+  -d               Deinterlace before encoding (bwdif)
+  -5               Remove 3:2 pulldown before encoding (fieldmatch,decimate)
   -q STRENGTH      Denoise before encoding (hqdn3d=STRENGTH; typically 4)
   -c CRF           Set CRF for x264 (default 16)
   -n               Dry-run mode; show what will be done
@@ -63,6 +64,7 @@ notimestamps=false
 dropouts=true
 x264crf=16
 deinterlace=false
+pulldown=false
 decoder=
 chromagain=
 chromaphase=
@@ -72,13 +74,16 @@ standard=ntsc
 denoise=
 lddargs=()
 noencode=false
-while getopts "3ABCc:Ddf:G:mnpP:q:s:tTV" c; do
+while getopts "35ABCc:Ddf:G:mnpP:q:s:tTV" c; do
 	case "$c" in
 	3)
 		analogue=false
 		analogueL=true
 		analogueR=false
 		ac3=true
+		;;
+	5)
+		pulldown=true
 		;;
 	A)
 		analogue=false
@@ -192,6 +197,16 @@ if $digital && [ "$standard" = pal ]; then
 fi
 if $ac3 && [ "$standard" = pal ]; then
 	echo >&2 "PAL can't have AC3"
+	exit 1
+fi
+
+# Check video options are sensible
+if $deinterlace && $pulldown; then
+	echo >&2 "Deinterlace and 3:2 pulldown don't make sense together"
+	exit 1
+fi
+if $pulldown && [ "$standard" = pal ]; then
+	echo >&2 "3:2 pulldown doesn't make sense for 50 FPS video"
 	exit 1
 fi
 
@@ -428,6 +443,10 @@ if [ ! -f "$out.mkv" ]; then
 	filters=""
 	if $deinterlace; then
 		filters="$filters,bwdif"
+	fi
+	if $pulldown; then
+		# XXX Using bwdif here produces 48 FPS output
+		filters="$filters,fieldmatch=combmatch=full,yadif=deint=interlaced,decimate"
 	fi
 	if [ -n "$denoise" ]; then
 		filters="$filters,hqdn3d=$denoise"
