@@ -228,7 +228,8 @@ class VideoEqualiser(EFMEqualiser):
         self.coeffs = None
 
 class EFMSimFilter:
-    """EFM filter based on ngspice models of real hardware."""
+    """EFM filter based on ngspice models of real hardware.
+    This works partly but not as well as EFMEqualiser."""
 
     def __init__(self):
         # Dummy controls
@@ -252,6 +253,49 @@ class EFMSimFilter:
         if self.amp[1] > 0.5:
             # Invert the imag part, to reverse the phase effect
             self.coeffs *= np.conjugate(ddd_coeffs)
+
+    def filter(self, comp):
+        comp *= self.coeffs
+
+def filtfft(filt, fft):
+    """Convert a B, A filter into an FFT filter.
+    (Adapted from the version in lddecode.utils, which is for a
+    complex-to-complex FFT; ours is real-to-complex.)"""
+    return sps.freqz(filt[0], filt[1], fft.real_size, whole=1)[1][:fft.complex_size]
+
+def make_iir(zeros, poles, fs):
+    # Convert time constants to frequencies, and pre-warp for bilinear
+    # transform
+    def prewarp(tcs):
+        return [-2 * fs * np.tan((1 / tc) / (2 * fs)) for tc in tcs]
+
+    zeros_w = prewarp(zeros)
+    poles_w = prewarp(poles)
+
+    tf_b, tf_a = sps.zpk2tf(zeros_w, poles_w, 1.0)
+    return sps.bilinear(tf_b, tf_a, fs)
+
+class EFMFitFilter:
+    """EFM filter based on generated filters trying to match the LD-V4300D
+    simulation above. Doesn't work very well."""
+
+    def __init__(self):
+        # Dummy controls
+        self.freqs = np.linspace(0.0e6, 2.0e6, num=4)
+        self.amp = np.array([0.2] * len(self.freqs))
+        self.phase = np.array([0.0] * len(self.freqs))
+
+        self.coeffs = None
+
+    def compute(self, fft):
+        # LPF - based on LD-V4300D, plus some extra HF removal
+        self.coeffs = filtfft(sps.ellip(N=5, rp=0.01, rs=32.5, Wn=1.5e6, fs=fft.sample_rate), fft)
+        self.coeffs *= filtfft((sps.firwin(numtaps=31, cutoff=2.5e6, fs=SAMPLE_RATE), [1.0]), fft)
+
+        # Deemphasis, using the values from the LaserDisc spec
+        poles = [5e-6 * 5.0 * self.amp[0]]
+        zeros = [318e-9 * 5.0 * self.amp[1]]
+        self.coeffs *= filtfft(make_iir(poles, zeros, fft.sample_rate), fft)
 
     def filter(self, comp):
         comp *= self.coeffs
