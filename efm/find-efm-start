@@ -1,0 +1,71 @@
+#!/bin/sh
+# Given a .ldf file captured from the player's EFM output (rather than the RF
+# testpoint), where the capture includes the spinup at the start, find the
+# offset in samples of 0:00.00.
+
+inputfile="$1"
+tmpdir="/d/extra/tmp"
+
+fs=40000000
+chunkbytes=$(expr $fs \* 2 \* 2)
+
+getposition () {
+	echo >&2 "==> Trying offset $offset"
+
+	ld-ldf-reader 2>/dev/null "$inputfile" "$offset" | \
+		head -c "$chunkbytes" | \
+		ld-efm-demodulate >/dev/null 2>&1 "$tmpdir/tmp.efm"
+	ld-process-efm "$tmpdir/tmp.efm" "$tmpdir/tmp.pcm" \
+		>"$tmpdir/tmp.log" 2>&1
+
+	line=$(grep 'Frames start time' "$tmpdir/tmp.log" | \
+		sed -e 's/.*time: //' -e 's/[:.]/ /g')
+	mins=$(echo $line | cut -d' ' -f1)
+	secs=$(echo $line | cut -d' ' -f2)
+	frames=$(echo $line | cut -d' ' -f3)
+	if [ -z "$frames" ]; then
+		echo >&2 "==> Getting position failed"
+		exit 1
+	fi
+	position=$(expr $frames + \( 75 \* $secs \) + \( 75 \* 60 \* $mins \))
+	echo >&2 "  ==> Offset $offset = $mins:$secs.$frames = $position frames"
+}
+
+# Get the time at two points that should definitely be past the lead-in
+offset=$(expr $fs \* 30)
+getposition
+aoffset=$offset
+aposition=$position
+
+offset=$(expr $fs \* 20)
+getposition
+boffset=$offset
+bposition=$position
+
+# Estimate where 0 should be. (This is usually spot on anyway.)
+offset=$(expr $boffset - \( \( $bposition \* \( $aoffset - $boffset \) \) / \( $aposition - $bposition \) \))
+
+# Seek forward a little from there, to avoid overshooting it
+offset=$(expr $offset + \( $fs / 15 \))
+
+prevoffset=$boffset
+prevposition=$bposition
+while :; do
+	getposition
+	if [ $position = 0 ]; then
+		echo >&2 "==> Found frame 0 at $offset"
+		echo $offset
+		exit 0
+	fi
+	if [ $position -gt $prevposition ]; then
+		echo >&2 "==> Didn't find frame 0 - earliest is frame $prevposition at $prevoffset"
+		echo $prevoffset
+		exit 0
+	fi
+
+	prevoffset=$offset
+	prevposition=$position
+
+	# Seek backward
+	offset=$(expr $offset - \( $fs / 75 \))
+done

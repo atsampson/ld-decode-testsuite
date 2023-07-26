@@ -1,0 +1,36 @@
+#!/bin/sh
+# Demodulate and decode a separate EFM capture.
+
+infile="$1"
+case "$infile" in
+*EFM@*)
+	offset=$(echo "$infile" | sed 's/.*EFM@\([0-9]*\).*/\1/')
+	;;
+*)
+	offset="$2"
+	if [ -z "$offset" ]; then
+		echo >&2 "Usage: decode-efm LDF-FILENAME OFFSET"
+		exit 1
+	fi
+	;;
+esac
+
+outdir=$(dirname "$infile")/out
+mkdir -p "$outdir"
+out="$outdir"/$(basename "$infile" .ldf)
+
+echo >&2 "==> Demodulating $infile starting at $offset"
+ld-ldf-reader "$infile" "$offset" | \
+	ld-efm-demodulate "$out".efm 2>&1 | \
+	tee "$out".efm.demod-log
+
+echo >&2 "==> Decoding to $out.digital.pcm"
+ld-process-efm "$out".efm "$out".digital.pcm 2>&1 | \
+	tee "$out".efm.log
+
+# XXX This doesn't do deemphasis (see complete-decode)
+echo >&2 "==> Converting to $out.digital.flac"
+sox \
+	-t raw -e signed -b 16 -r 44100 -c 2 "$out".digital.pcm \
+	"$out".digital.flac \
+	stats
