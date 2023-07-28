@@ -1,0 +1,35 @@
+#!/bin/sh
+# Cut a section out of a .ldf just based on sample numbers.
+
+fs=40000000
+maybetime () {
+	case "$1" in
+	*m)
+		expr $(echo "$1" | sed 's/m$//') \* 60 \* "$fs"
+		;;
+	*s)
+		expr $(echo "$1" | sed 's/m$//') \* "$fs"
+		;;
+	*)
+		echo "$1"
+		;;
+	esac
+}
+
+infile="$1"
+outfile="$2"
+seekpos=$(maybetime "$3")
+length=$(maybetime "$4")
+if [ -z "$length" ]; then
+	cat >&2 <<EOF
+Usage: cut-efm INPUT.ldf OUTPUT.lds START LENGTH
+START and LENGTH are sample numbers, XXm for minutes or XXs for seconds.
+EOF
+	exit 1
+fi
+
+lengthbytes=$(expr "$length" \* 2)
+ld-ldf-reader 2>/dev/null "$infile" "$seekpos" | \
+	head -c "$lengthbytes" | \
+	pv --size "$lengthbytes" | \
+	ld-lds-converter -p -o "$outfile"
