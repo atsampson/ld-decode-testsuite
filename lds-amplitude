@@ -36,7 +36,7 @@ def scan(filename):
             offset_bytes = (offset_samples // 4) * 5
 
             # lddecode loaders return 16-bit signed values
-            data = lddecode.utils.load_packed_data_4_40(f, offset_samples, CHUNK_SIZE).astype(np.float)
+            data = lddecode.utils.load_packed_data_4_40(f, offset_samples, CHUNK_SIZE).astype(float)
 
             # Compute peak and RMS amplitude
             peak = np.max(np.abs(data))
